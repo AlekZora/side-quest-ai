@@ -1,0 +1,37 @@
+[
+  {
+    "main_quest": "Rescue Elena from the Syndicate",
+    "last_player_action": "Bribed the eastern gate guard",
+    "npc_name": "Mira",
+    "npc_situation": "Sick daughter needs medicine from eastern district, blocked by guards",
+    "npc_knowledge": "Heard someone bribed the eastern guard this morning"
+  },
+  {
+    "main_quest": "Rescue Elena from the Syndicate",
+    "last_player_action": "Publicly accused the innkeeper of working for the Syndicate",
+    "npc_name": "Tomás",
+    "npc_situation": "The innkeeper is his uncle — now shunned by the whole street",
+    "npc_knowledge": "Watched the player make the accusation from across the square"
+  },
+  {
+    "main_quest": "Rescue Elena from the Syndicate",
+    "last_player_action": "Let a Syndicate courier go free instead of detaining him",
+    "npc_name": "Sera",
+    "npc_situation": "Her brother was taken by the Syndicate last week — she was counting on that courier being caught",
+    "npc_knowledge": "Was hiding nearby when the player released the courier"
+  },
+  {
+    "main_quest": "Rescue Elena from the Syndicate",
+    "last_player_action": "Burned the Syndicate's supply manifest rather than handing it to the resistance",
+    "npc_name": "Commander Voss",
+    "npc_situation": "The resistance is now blind to Syndicate supply routes — one of his cells walked into an ambush",
+    "npc_knowledge": "A resistance contact told him the player destroyed the manifest"
+  },
+  {
+    "main_quest": "Rescue Elena from the Syndicate",
+    "last_player_action": "Paid for a child's food at the market with Syndicate coin taken from a dead guard",
+    "npc_name": "Daria",
+    "npc_situation": "She is the child's mother — the Syndicate marked the coin and now considers her family in debt",
+    "npc_knowledge": "Recognized the coin stamp when she went to spend it"
+  }
+]
