@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GameState",
+  "description": "Minimum game state passed to the quest generator for a single NPC interaction. 5 fields. Derived from test-states.json v1.",
+  "type": "object",
+  "required": [
+    "main_quest",
+    "player_action",
+    "npc_name",
+    "npc_situation",
+    "npc_knowledge"
+  ],
+  "properties": {
+    "main_quest": {
+      "type": "string",
+      "description": "The player's current primary objective — the overarching story goal the NPC exists inside of. Anchors what kinds of intelligence the NPC can offer as a quest reward and prevents side quests from contradicting or resolving main story beats. Human-authored, fixed per act.",
+      "example": "Rescue Elena from the Syndicate"
+    },
+    "player_action": {
+      "type": "string",
+      "description": "The most recent significant player action that has propagated into the world. The triggering event — why this NPC approaches the player now rather than some other time. Must be specific enough that the NPC's response can only plausibly follow from this exact action, not a generic player archetype.",
+      "example": "Bribed the eastern gate guard"
+    },
+    "npc_name": {
+      "type": "string",
+      "description": "The NPC's name. Referenced directly in prompt construction and in generated dialogue. Enables personalization and cross-session continuity. Kept as a standalone field so the generator can address the NPC explicitly without parsing npc_situation.",
+      "example": "Mira"
+    },
+    "npc_situation": {
+      "type": "string",
+      "description": "The NPC's pre-existing, player-independent problem, goal, or circumstance — what was already true about their life before the player's action intersected with it. This field makes the NPC feel like they have their own life. Without it, NPCs are purely reactive and the world exists to serve the player. The collision between npc_situation and player_action is where the quest lives.",
+      "example": "Sick daughter needs medicine from the eastern district, blocked by guards"
+    },
+    "npc_knowledge": {
+      "type": "string",
+      "description": "Exactly what this NPC knows about the player's action and how they came to know it. The grounding constraint: the NPC can only reference information they plausibly have through a believable channel (eyewitness, gossip, deduction, rumor). This field is what produces the 'how did they know that?' reaction. Without it the LLM invents implausible knowledge and the grounding breaks.",
+      "example": "Heard someone bribed the eastern guard this morning"
+    }
+  },
+  "example_instance": {
+    "main_quest": "Rescue Elena from the Syndicate",
+    "player_action": "Bribed the eastern gate guard",
+    "npc_name": "Mira",
+    "npc_situation": "Sick daughter needs medicine from the eastern district, blocked by guards",
+    "npc_knowledge": "Heard someone bribed the eastern guard this morning"
+  }
+}

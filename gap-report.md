@@ -162,6 +162,19 @@ Specifically missing:
 
 **Research:** Look at how shipped procedural narrative games handle consistency. Façade and Dwarf Fortress are both relevant. Façade is especially useful because it was designed explicitly to maintain narrative coherence under real-time player input — the consistency problem it solves is similar to this one.
 
+## Fact Database Architecture (from world-models open question)
+
+Five symbolic tables — no physics required:
+
+events: id, what, when, actor, witnesses[]
+entities: id, type, status, location, owner
+relationships: from, to, type, strength
+player: choices[], inventory[], visited[], completed_quests[]
+npc_knowledge: npc_id → known_events[], beliefs{}
+
+Source: world-models.md open question answer
+Build at step 6, not now.
+
 ---
 
 ## 5. PLAYER FEEL

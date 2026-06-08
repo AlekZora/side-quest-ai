@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NPCDefinition",
+  "description": "Static NPC record filled once by a world builder before any player interaction. Gives the quest generator enough to produce grounded, emotionally resonant quests through this character. Distinct from game state fields (npc_situation, npc_knowledge) which are populated at runtime.",
+  "type": "object",
+  "required": [
+    "name",
+    "situation",
+    "want",
+    "stake",
+    "network"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The NPC's name. Primary key linking this record to game state instances and dialogue. Kept as a standalone field so the generator can address the NPC directly without parsing other fields.",
+      "example": "Petra"
+    },
+    "situation": {
+      "type": "string",
+      "description": "The NPC's persistent, ongoing circumstance — who they are and what they are doing in the world before any player interaction. This is the static core that the game state's npc_situation expands dynamically at runtime. Must describe a concrete, visible role or activity, not a personality type. The world was already moving before the player arrived; this field is the evidence of that.",
+      "example": "Former Syndicate bookkeeper, now keeps accounts for three eastern market merchants. Has been quietly forging transaction records to cover the movements of resistance members — a habit she started for money and has continued out of something she won't name."
+    },
+    "want": {
+      "type": "string",
+      "description": "The concrete goal the NPC is actively working toward. Not a trait ('she values safety') but an achievable objective she is currently pursuing ('she is trying to keep the forgeries small enough to remain deniable'). The want defines what the NPC will ask the player to help with and ensures the quest task connects to something the NPC genuinely needs.",
+      "example": "Maintain distance from both sides — keep the forgeries small and deniable, keep the merchants satisfied enough not to look closely at their own books, and get through one more month without being found."
+    },
+    "stake": {
+      "type": "string",
+      "description": "What this NPC stands to lose if things go wrong — their emotional core. This is the sim-to-feel bridge: a simulator can track that an NPC has been forging records, but without the stake the generator produces a quest about covering tracks. With the stake it produces a quest about a person who knows the cost of being caught. The stake must name something specific and irreplaceable — a person, a relationship, an identity — not an abstraction like 'her freedom' or 'her livelihood'.",
+      "example": "Her brother Andrei still works as a junior clerk for the Syndicate. If her forgeries are discovered, the investigation will reach him regardless of what he knew. She would be destroying him — the only family she has left — to protect people she barely knows. She has not spoken to him in three months because every conversation feels like a goodbye she hasn't explained."
+    },
+    "network": {
+      "type": "string",
+      "description": "Who this NPC knows, interacts with regularly, and has access to information through. This field makes runtime npc_knowledge believable: the world builder specifies the NPC's information channels so the generator knows what could plausibly reach them. Also defines what they can offer as a quest reward — a bookkeeper's network is different from a resistance commander's. Must be concrete (named roles or locations, not 'she knows people').",
+      "example": "Processes accounts for the grain merchant, the cloth trader, and the apothecary — sees all transaction records for the eastern market, including Syndicate supply purchases made through front businesses. Her brother's Syndicate supervisor is a regular customer at the grain merchant and sometimes asks her to 'hold' certain ledger entries for correction."
+    }
+  },
+  "example_instance": {
+    "name": "Petra",
+    "situation": "Former Syndicate bookkeeper, now keeps accounts for three eastern market merchants. Has been quietly forging transaction records to cover the movements of resistance members — a habit she started for money and has continued out of something she won't name.",
+    "want": "Maintain distance from both sides — keep the forgeries small and deniable, keep the merchants satisfied enough not to look closely at their own books, and get through one more month without being found.",
+    "stake": "Her brother Andrei still works as a junior clerk for the Syndicate. If her forgeries are discovered, the investigation will reach him regardless of what he knew. She would be destroying him — the only family she has left — to protect people she barely knows. She has not spoken to him in three months because every conversation feels like a goodbye she hasn't explained.",
+    "network": "Processes accounts for the grain merchant, the cloth trader, and the apothecary — sees all transaction records for the eastern market, including Syndicate supply purchases made through front businesses. Her brother's Syndicate supervisor is a regular customer at the grain merchant and sometimes asks her to 'hold' certain ledger entries for correction."
+  }
+}
