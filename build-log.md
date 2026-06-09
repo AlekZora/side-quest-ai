@@ -117,3 +117,85 @@ Step 7 — Godot setup
 ### Next session starts here
 Begin Godot project setup.
 Do not build more prototype features before Godot is running.
+
+---
+
+## 2026-06-09 (continued — step labeling correction + Step 6 design)
+
+### Labeling correction
+The previous entry mislabeled the quest-generator-v3.py routing work as
+"Step 6" and forward-projected "Step 7 — Godot" as next. That was wrong.
+The v3.py routing was the implementation half of Step 5 (templates).
+The real Step 6 is the fact database and hard-constraint validator.
+Step 7 (Godot) is gated on Step 6 completion.
+PROJECT-CONTEXT.md was updated separately to reflect this.
+
+### Completed
+- Step 6 design document drafted (no code).
+  File: wiki/projects/game/fact-database-design.md
+
+  Document answers the five design questions:
+  1. Schema — eight tables specified:
+     - 5 core (events, entities, relationships, player, npc_knowledge)
+     - 2 indexes (player_choices, quests)
+     - 1 deferred to V2 (npc_beliefs)
+     Each table has exact field definitions with reasoning.
+  2. Hard constraints — 14 numbered constraints across 4 categories
+     (existence, state, causation, narrative integrity, temporal).
+     User's 4 base constraints incorporated and expanded.
+     V1 vs V2 split called out — rule-based first, LLM judge later.
+  3. Soft constraints — 10 weighted multipliers across 4 categories
+     (pacing, relationship, template-specific, player state).
+     V1 ships with 6, V2 adds the rest.
+  4. Validation pipeline — three phases (trigger, generation, validation)
+     with 15 numbered steps. Phase A is pre-generation candidate selection;
+     Phase C is post-generation hard-constraint checks.
+  5. Failure recovery — 4-step cascade R1–R4 ending in silent skip.
+     Handcrafted fallback explicitly rejected (breaks experience goal
+     contract).
+
+  Open questions surfaced:
+  - Gossip propagation cadence (timer vs interaction-triggered)
+  - In-game tick definition (waits for Godot integration)
+  - Entity extraction strategy for hard constraint C2
+  - Stake threat detection requires LLM judge
+  - Concurrency: serialize V1, parallel V2
+
+### Current step
+Step 6 implementation — build the SQLite schema and validator per the
+design document. Follow the 8-step implementation order at the bottom
+of fact-database-design.md.
+
+### Next session starts here
+1. SQLite schema migration script — create all 8 tables.
+2. Seed data: convert Serge / Daria / Otto / Nadia from quest-templates.md
+   into entities + relationships + npc_knowledge rows.
+3. Pre-generation pipeline (Phase A of validation pipeline).
+4. Rule-based hard constraint checks (C3, C4, C5).
+5. quest-generator-v4.py that consumes from the DB instead of inline dicts.
+
+Do NOT skip to Godot. Step 7 starts only after end-to-end test passes
+with quests sourced from the DB.
+
+---
+
+## 2026-06-09 — End of Day
+
+### Completed today
+- Step 5: Four quest templates built and validated
+- quest-generator-v3.py routing all four templates
+- Step 6 design document completed (fact-database-design.md)
+- Gossip propagation Open Question 1 resolved
+- Ready to build SQLite migration script tomorrow
+
+### Tomorrow starts here
+Send to Claude Code: "Read PROJECT-CONTEXT.md and
+build-log.md. We are ready to build Step 1 of Step 6
+implementation: the SQLite schema migration script
+(init_db.py). Follow the implementation order in
+fact-database-design.md."
+
+### Research done today
+- Perplexity searches on SQLite game state, gossip
+  propagation, spy/noir game settings
+- Results saved to raw/articles/ for ingestion tomorrow
