@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GameState",
-  "description": "Minimum game state passed to the quest generator for a single NPC interaction. 5 fields. Derived from test-states.json v1.",
+  "description": "Game state passed to the quest generator for a single NPC interaction. 5 required fields + 1 conditional field (player_history). Core 5 derived from test-states.json v1. player_history confirmed necessary by Template 3 (Player Choice Callback).",
   "type": "object",
   "required": [
     "main_quest",
@@ -35,6 +35,36 @@
       "type": "string",
       "description": "Exactly what this NPC knows about the player's action and how they came to know it. The grounding constraint: the NPC can only reference information they plausibly have through a believable channel (eyewitness, gossip, deduction, rumor). This field is what produces the 'how did they know that?' reaction. Without it the LLM invents implausible knowledge and the grounding breaks.",
       "example": "Heard someone bribed the eastern guard this morning"
+    },
+    "player_history": {
+      "type": "array",
+      "description": "Accumulated record of significant past player actions that have propagated into the world. Required for Template 3 (Player Choice Callback). Ordered oldest-first. Each entry contains the action taken and the context of when and where it occurred. The callback template selects one past action as the referenced_choice — the actual reason the NPC approaches. player_action holds the most recent action; player_history holds everything before it. Step 6 (fact database) is responsible for populating this field at runtime.",
+      "items": {
+        "type": "object",
+        "required": ["action", "context"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The specific action the player took.",
+            "example": "Let a detained woman go at the eastern gate without collecting the release fee"
+          },
+          "context": {
+            "type": "string",
+            "description": "When and where it happened, and who observed it.",
+            "example": "Three weeks ago. Otto was in the holding room and heard the exchange. The player did not know anyone was listening."
+          }
+        }
+      },
+      "example": [
+        {
+          "action": "Let a detained woman go at the eastern gate without collecting the release fee",
+          "context": "Three weeks ago. Otto was in the holding room. The player did not know anyone was listening."
+        },
+        {
+          "action": "Bribed the eastern gate guard to pass through after curfew",
+          "context": "Two weeks ago. Otto logged it."
+        }
+      ]
     }
   },
   "example_instance": {

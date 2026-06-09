@@ -50,15 +50,17 @@ Failure: player accepts quest without reading it.
 2. ✅ Standalone generation test harness
 3. ✅ Minimum game state schema — 5 fields
 4. ✅ Minimum NPC schema — 5 fields
-5. ⬜ Three quest templates (main quest escalation, 
-      NPC personal crisis, player-choice callback) — CURRENT STEP
-6. ⬜ Fact database and hard-constraint validator
+5. ✅ Four quest templates — COMPLETE
+      File: wiki/projects/game/quest-templates.md
+      quest-generator-v3.py routes all four templates
+6. ⬜ Fact database and hard-constraint validator — NEXT
+      Do NOT skip to Godot. Step 6 comes before step 7.
 7. ⬜ Godot setup
 8. ⬜ Q6 experiment protocol
 
 ## Current step
-Step 5 — write three quest templates.
-Do not go to Godot yet.
+Step 6 — fact database and hard-constraint validator.
+Do not go to Godot yet. Step 6 comes before step 7.
 Do not ask "game path vs AI system path" — it is one product.
 
 ## Key constraints

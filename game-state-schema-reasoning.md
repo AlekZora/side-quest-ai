@@ -222,6 +222,12 @@ chain reaches them. This is Step 3's natural extension
 toward Step 5 (quest templates with player-choice 
 callbacks).
 
+player_history is now confirmed necessary by Template 3 
+(Player Choice Callback). The template requires past 
+choices as an array, not just the most recent action. 
+This field should be added to the game state schema 
+for step 6 implementation.
+
 **`world_state_flags` (object):**
 Named boolean consequences of player actions that have 
 altered the world. Example: `{"eastern_guard_bribed": true, 
