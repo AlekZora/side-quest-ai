@@ -53,15 +53,31 @@ Failure: player accepts quest without reading it.
 5. ✅ Four quest templates — COMPLETE
       File: wiki/projects/game/quest-templates.md
       quest-generator-v3.py routes all four templates
-6. ⬜ Fact database and hard-constraint validator — NEXT
-      Do NOT skip to Godot. Step 6 comes before step 7.
-7. ⬜ Godot setup
+6. ✅ Fact database and hard-constraint validator — COMPLETE
+      Files: init_db.py, seed_db.py, pipeline.py, validator.py,
+             quest-generator-v4.py, blackwater.db
+7. ⬜ Godot setup — NEXT
 8. ⬜ Q6 experiment protocol
 
 ## Current step
-Step 6 — fact database and hard-constraint validator.
-Do not go to Godot yet. Step 6 comes before step 7.
-Do not ask "game path vs AI system path" — it is one product.
+Step 7 — Godot setup.
+Do not build more prototype features before Godot is running.
+
+## Known Issues
+
+### V1 VALIDATOR ISSUES — fix before Q6 experiment (Step 8)
+- C1: The C1 structural check regex handles **N.** (Markdown bold)
+  but not ## N. (Markdown section headers). Model sometimes chooses
+  the header format. Fix: extend regex to match `##?\s*` prefix OR
+  add format constraint to quest generator prompt ("Use plain numbered
+  list: 1. WHY ..."). Estimated: 10 minutes.
+
+### V2 VALIDATOR ISSUES — fix before public demo
+- C3: Heuristic proper-noun extractor (Title-Case regex) produces
+  false positives for sentence-start words paired with entity names
+  or safe words (e.g. "But Otto", "No Syndicate"). Fix: replace
+  heuristic NER with a trained named entity recognition model.
+  Estimated: 1-2 days.
 
 ## Key constraints
 - Main story is human authored and fixed
