@@ -39,6 +39,24 @@ not from what the writer pre-planned.
 The writer's job: know your characters deeply.
 The system's job: generate the collisions.
 
+## The Enterprise AI Connection
+
+The fact database and constraint validator in this 
+project solve the same architectural problem as 
+enterprise AI automation:
+
+- Tacit knowledge problem → NPC knowledge that 
+  exists nowhere explicit
+- Skills files → NPC schema + fact database rows
+- Company brain → the world state extraction system
+- Grounded agent execution → quest generator that 
+  only references verified facts
+
+The architecture that prevents hallucination in 
+enterprise AI agents is the same architecture that 
+prevents hallucinated quests in this game. 
+Same problem, different domain.
+
 ## Scope Boundary
 
 Scope boundary: the system generates side quests that 
