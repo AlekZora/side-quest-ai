@@ -99,11 +99,12 @@ def score_pair(conn, npc, template, current_tick):
     """
     Score one (NPC, template) pair. Returns (score, breakdown_dict).
     All multipliers start at 1.0; each constraint multiplies the running score.
-    V1 ships: cooldown, variety, trust, callback_freshness, stake_activation, quest_load.
+    V1 ships: cooldown, variety, trust, callback_freshness, template_affinity, stake_activation, quest_load.
     """
     score      = 1.0
     breakdown  = {}
     npc_id     = npc["id"]
+    props      = npc["properties"]
 
     # NPC cooldown — penalise if this NPC appears in the last COOLDOWN_WINDOW quests
     recent_count = conn.execute("""
@@ -165,6 +166,12 @@ def score_pair(conn, npc, template, current_tick):
         breakdown["callback_freshness"] = freshness
     else:
         breakdown["callback_freshness"] = "-"
+
+    # Template affinity — bonus when NPC was authored for this template type
+    affinity      = props.get("template_affinity")
+    affinity_mult = 1.3 if affinity == template else 1.0
+    score        *= affinity_mult
+    breakdown["template_affinity"] = affinity_mult
 
     # Stake activation — V1: always 1.0
     # V2 expansion: detect whether a recent event threatened the NPC's stake referent

@@ -87,6 +87,11 @@ def write_quest(conn, npc_id, template_type, status, quest_text,
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (npc_id, template_type, status, quest_text,
           referenced_event_id, current_tick, validation_log))
+    if template_type == "callback" and referenced_event_id is not None and status == "validated":
+        conn.execute(
+            "UPDATE player_choices SET callback_used = 1 WHERE event_id = ?",
+            (referenced_event_id,)
+        )
     conn.commit()
     return cursor.lastrowid
 
