@@ -56,14 +56,19 @@ ITEM_LABELS = {
 def check_c1(quest_text, template_type):
     """
     Verify the quest output contains all 5 numbered items.
-    Looks for '1.' through '5.' at the start of a line with optional
-    leading whitespace and Markdown bold markers (**).
+    Looks for '1.' through '5.' at the start of a line, allowing any
+    combination of the markers Haiku actually emits around the number:
+      1. WHY          ## 1. WHY        **1. WHY**
+        1. WHY        ### **1.** WHY   ## **1.** WHY
+    i.e. optional indent, optional ATX heading (# to ######), optional
+    asterisks before and after the number.
     Returns (passed, reason).
     """
     labels  = ITEM_LABELS.get(template_type, {})
     missing = []
     for i in range(1, 6):
-        if not re.search(rf'(?m)^\s*\**{i}\.\s', quest_text):
+        if not re.search(rf'(?m)^[ \t]*(?:#{{1,6}}[ \t]*)?\**[ \t]*{i}\.\**(?:\s|$)',
+                         quest_text):
             label = labels.get(i, str(i))
             missing.append(f"{i} ({label})")
     if missing:
@@ -95,21 +100,73 @@ def lookup_entity(entity_index, noun):
     return None
 
 
+# ATX markdown headings ("## 2. WHAT Otto Witnessed"). Header text is template
+# scaffolding — it restates the prompt's own section labels — so the Title-Case
+# words in it are not claims about the world and should not be entity candidates.
+ATX_HEADING_RE = re.compile(r'(?m)^[ \t]*#{1,6}.*$')
+
+
 def extract_proper_nouns(quest_text):
     """
     Extract Title-Case word sequences as candidates for entity references.
     Matches one or more consecutive words each starting with an uppercase letter
     followed by lowercase letters (min length 2 per word).
-    Known limitation (per design doc §C2): over-matches sentence-start words,
-    under-matches lowercase entity references like 'the manifest'.
+
+    ATX heading lines are blanked before matching (see ATX_HEADING_RE). Note
+    this applies to every caller, C4 included: an entity named ONLY inside a
+    heading is no longer state-checked either. Pass the raw text if a caller
+    ever needs headings back.
+
+    Words are joined with [ \\t]+ rather than \\s+ on purpose: \\s matches
+    newlines, which glued the last word of a heading to the first word of the
+    next paragraph ("Otto Needs\\n\\nOtto"). Those sequences can never resolve
+    against the entity table, so they flagged as hallucinations on every run.
+
+    Known limitation (per design doc §C2): over-matches sentence-start words
+    (partly mitigated by SENTENCE_OPENERS below), under-matches lowercase
+    entity references like 'the manifest'.
     V2 replaces this with a trained NER model.
     """
-    return set(re.findall(r'\b[A-Z][a-z]{1,}(?:\s+[A-Z][a-z]{1,})*\b', quest_text))
+    body = ATX_HEADING_RE.sub("", quest_text)   # blank the line, keep line structure
+    return set(re.findall(r'\b[A-Z][a-z]{1,}(?:[ \t]+[A-Z][a-z]{1,})*\b', body))
 
 
-def is_safe_sequence(noun):
-    """True if every word in the sequence is a known-safe word (suppress hallucination flag)."""
-    return all(w.lower() in SAFE_WORDS for w in noun.split())
+# Words that commonly open a sentence and get swept into the following
+# capitalised word ("But Elena", "If Elena"). When a sequence starts with one,
+# the opener is stripped and the remainder re-tested — so "But Elena" resolves
+# to Elena, while "The Vaskov Ledger" still flags as "Vaskov Ledger".
+# Heuristic only: a real fix needs the trained NER model queued for C3 in V2.
+SENTENCE_OPENERS = {
+    "but", "if", "once", "when", "and", "the", "this", "that",
+    "after", "before", "now", "so", "then", "yet",
+}
+
+
+def strip_sentence_opener(noun):
+    """
+    If a multi-word sequence starts with a common sentence-opening word,
+    return the sequence without it. Returns None when there is nothing to
+    strip. Single pass — 'But The Manifest' yields 'The Manifest', and
+    lookup_entity's own article stripping takes it from there.
+    """
+    words = noun.split()
+    if len(words) > 1 and words[0].lower() in SENTENCE_OPENERS:
+        return " ".join(words[1:])
+    return None
+
+
+def is_safe_sequence(noun, entity_index=None):
+    """
+    True if every word in the sequence is safe — either a known-safe word from
+    SAFE_WORDS, or a word that resolves to an entity in the index. The second
+    rule is what lets "What Otto" through: 'what' is scaffolding and 'Otto' is
+    a real NPC, so the pair asserts nothing unverified.
+
+    entity_index is optional so existing callers keep working; without it the
+    check falls back to SAFE_WORDS alone.
+    """
+    index = entity_index or {}
+    return all(w.lower() in SAFE_WORDS or w.lower() in index for w in noun.split())
 
 
 def check_c3(conn, quest_text):
@@ -121,20 +178,38 @@ def check_c3(conn, quest_text):
       3. If it is a single unknown word: skip — sentence-start words and gerunds
          produce too many false positives for single-word detection in V1.
          (V2 replaces this with a trained NER model.)
-      4. Multi-word unknown sequence not covered above: flag as potential hallucination.
+      4. If it starts with a sentence-opening word, strip it and re-run 1-3 on
+         the remainder: "But Elena" is Elena, not an unknown entity.
+      5. Multi-word unknown sequence not covered above: flag as potential
+         hallucination. Where an opener was stripped, the remainder is what
+         gets reported — that is the part that failed to resolve.
     Returns (passed, issues_list).
     """
     entity_index   = get_entity_index(conn)
     proper_nouns   = extract_proper_nouns(quest_text)
     hallucinations = []
 
+    def unresolved(seq):
+        """True if seq is a multi-word sequence that resolves to nothing known."""
+        if lookup_entity(entity_index, seq) is not None:
+            return False                     # known entity — existence confirmed
+        if is_safe_sequence(seq, entity_index):
+            return False                     # every word is scaffolding or a known entity
+        if len(seq.split()) == 1:
+            return False                     # single-word: too noisy in V1
+        return True
+
     for noun in proper_nouns:
-        if lookup_entity(entity_index, noun) is not None:
-            continue                         # known entity — existence confirmed
-        if is_safe_sequence(noun):
-            continue                         # all words are world/article terms
-        if len(noun.split()) == 1:
-            continue                         # single-word: too noisy in V1
+        if not unresolved(noun):
+            continue
+
+        # Sentence opener swept into the following capitalised word.
+        remainder = strip_sentence_opener(noun)
+        if remainder is not None:
+            if unresolved(remainder):
+                hallucinations.append(remainder)
+            continue
+
         hallucinations.append(noun)          # multi-word unknown: potential hallucination
 
     issues = []

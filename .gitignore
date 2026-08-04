@@ -10,8 +10,8 @@ env/
 .env
 .env.local
 
-# Database (optional — remove if you want db in repo)
-# blackwater.db
+# Database — generated locally by init_db.py + seed_db.py
+blackwater.db
 
 # OS
 .DS_Store

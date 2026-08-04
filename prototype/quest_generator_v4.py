@@ -1,5 +1,5 @@
 """
-quest-generator-v4.py — End-to-end pipeline → generation → validation → DB write.
+quest_generator_v4.py — End-to-end pipeline → generation → validation → DB write.
 
 Flow:
   1. pipeline.run_pipeline()  — select NPC, template, assemble game state from DB
@@ -310,6 +310,141 @@ PROMPT_BUILDERS = {
 }
 
 
+# ── Generation ────────────────────────────────────────────────────────────────
+
+# A retry re-samples the *same* prompt, so it can only help when the failure
+# depends on what the model happened to write. C3 (hallucinated entity) and C4
+# (referenced a dead/destroyed entity) are that kind of failure — a different
+# draft may simply not name the offending thing. C1 (missing numbered items)
+# and C5 (callback bookkeeping) are not: C1 is a formatting mismatch that
+# reproduces, and C5 is decided by DB state that no re-sample can change.
+#
+# Checks not listed here are treated as non-retryable — the conservative
+# default, since spending another API call on an unknown failure mode is the
+# expensive way to be wrong. Add C6/C7/C8 here once the LLM judge lands and
+# their sampling behaviour is known.
+RETRYABLE_CHECKS = {"C3", "C4"}
+
+
+def generate_quest(conn, pipeline_result, max_attempts=2):
+    """
+    Generate, validate, and persist one quest from a pipeline result.
+
+    Runs prompt → API → validate, retrying only when validation failed *and*
+    every failing check is in RETRYABLE_CHECKS, up to max_attempts times. The
+    prompt is unchanged between attempts — a retry is a fresh sample, not a
+    repair. Only the final attempt is written to the quests table (one row per
+    call), so a caller passing max_attempts=1 gets exactly the pre-refactor
+    behaviour.
+
+    Returns:
+      quest_text      — text of the final attempt
+      npc_id/npc_name/template — echoed from the pipeline result
+      passed          — validation result of the final attempt
+      attempts        — number of API calls made
+      retry_reason    — final-decision summary, i.e. attempt_log[-1]["reason"]
+      attempt_log     — one record per attempt: {attempt, failed, retried, reason}.
+                        retry_reason alone is lossy: "attempts: 2" with reason
+                        "no retry" is accurate but hides that attempt 1 failed a
+                        retryable check and attempt 2 failed a blocking one.
+      failed_checks   — sorted check IDs that failed on the final attempt
+      validation_log  — JSON string as written to quests.validation_log
+      quest_row_id    — quests.id of the written row (None if nothing was written)
+      validation      — full validator.validate() result of the final attempt
+      input_tokens / output_tokens — usage of the final attempt
+    """
+    npc_id     = pipeline_result["npc_id"]
+    npc_name   = pipeline_result["npc_name"]
+    template   = pipeline_result["template"]
+    game_state = pipeline_result["game_state"]
+
+    npc     = load_npc_for_prompt(conn, npc_id)
+    builder = PROMPT_BUILDERS[template]
+    prompt  = builder(game_state, npc)
+
+    # Stable across attempts: callback_used is only flipped by write_quest,
+    # which runs once, after the loop.
+    referenced_event_id = None
+    if template == "callback":
+        referenced_event_id = get_referenced_choice_event_id(conn, npc_id)
+
+    current_tick = pipe.get_current_tick(conn)
+
+    attempts    = 0
+    attempt_log = []
+    while True:
+        attempts += 1
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        quest_text = message.content[0].text
+        in_tok     = message.usage.input_tokens
+        out_tok    = message.usage.output_tokens
+
+        vr = val.validate(
+            conn, quest_text, npc_id, template,
+            referenced_choice_id=referenced_event_id,
+        )
+
+        failed_checks = sorted({f["check"] for f in vr["failures"]})
+        blocking      = [c for c in failed_checks if c not in RETRYABLE_CHECKS]
+
+        if vr["passed"]:
+            retried, reason = False, f"no retry needed — passed on attempt {attempts}"
+        elif blocking:
+            retried, reason = False, (
+                f"no retry — {', '.join(blocking)} "
+                f"cannot be fixed by re-sampling an unchanged prompt"
+            )
+        elif attempts >= max_attempts:
+            retried, reason = False, (
+                f"retry budget spent after {attempts} attempt(s) — "
+                f"{', '.join(failed_checks)} still failing"
+            )
+        else:
+            retried, reason = True, (
+                f"retrying after attempt {attempts} — "
+                f"{', '.join(failed_checks)} may pass on a different draft"
+            )
+
+        attempt_log.append({
+            "attempt": attempts,
+            "failed":  failed_checks,
+            "retried": retried,
+            "reason":  reason,
+        })
+
+        if not retried:
+            retry_reason = reason       # final decision, summarising the trail
+            break
+
+    db_status    = "validated" if vr["passed"] else "failed_validation"
+    quest_row_id = write_quest(
+        conn, npc_id, template, db_status, quest_text,
+        referenced_event_id, current_tick, vr["validation_log"],
+    )
+
+    return {
+        "quest_text":     quest_text,
+        "npc_id":         npc_id,
+        "npc_name":       npc_name,
+        "template":       template,
+        "passed":         vr["passed"],
+        "attempts":       attempts,
+        "retry_reason":   retry_reason,
+        "attempt_log":    attempt_log,
+        "failed_checks":  failed_checks,
+        "validation_log": vr["validation_log"],
+        "quest_row_id":   quest_row_id,
+        # Extras the CLI needs to print; safe for other callers to ignore.
+        "validation":     vr,
+        "input_tokens":   in_tok,
+        "output_tokens":  out_tok,
+    }
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -346,7 +481,6 @@ def main():
     template  = result["template"]
     score     = result["score"]
     breakdown = result["breakdown"]
-    game_state = result["game_state"]
 
     print(f"  Selected NPC:    {npc_name}")
     print(f"  Template:        {template}")
@@ -361,26 +495,21 @@ def main():
         print(f"    {n:<12} {t:<18} {d['score']}")
     print()
 
-    # ── Step 2: Load NPC for prompt ──────────────────────────────────────────
-
-    npc = load_npc_for_prompt(conn, npc_id)
-
-    # ── Step 3: Build prompt ─────────────────────────────────────────────────
-
-    builder = PROMPT_BUILDERS[template]
-    prompt  = builder(game_state, npc)
-
-    # ── Step 4: Call Claude Haiku ────────────────────────────────────────────
+    # ── Steps 2-6: Generate, validate, write ─────────────────────────────────
+    #
+    # max_attempts=1 keeps the CLI on the original single-shot path — no retry
+    # on validation failure, so the "recovery cascade" note below still marks
+    # the R1 gap. Other callers (Godot bridge) get retries via the default.
 
     print("  Calling Claude Haiku...")
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1200,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    quest_text = message.content[0].text
-    in_tok     = message.usage.input_tokens
-    out_tok    = message.usage.output_tokens
+    gen = generate_quest(conn, result, max_attempts=1)
+
+    quest_text = gen["quest_text"]
+    in_tok     = gen["input_tokens"]
+    out_tok    = gen["output_tokens"]
+    vr         = gen["validation"]
+    quest_id   = gen["quest_row_id"]
+    db_status  = "validated" if gen["passed"] else "failed_validation"
 
     print(f"  Tokens: {in_tok} in / {out_tok} out")
     print()
@@ -389,25 +518,6 @@ def main():
     print("─" * 62)
     print(quest_text)
     print()
-
-    # ── Step 5: Validate ─────────────────────────────────────────────────────
-
-    referenced_event_id = None
-    if template == "callback":
-        referenced_event_id = get_referenced_choice_event_id(conn, npc_id)
-
-    vr = val.validate(
-        conn, quest_text, npc_id, template,
-        referenced_choice_id=referenced_event_id,
-    )
-
-    # ── Step 6: Write to quests table ────────────────────────────────────────
-
-    db_status = "validated" if vr["passed"] else "failed_validation"
-    quest_id  = write_quest(
-        conn, npc_id, template, db_status, quest_text,
-        referenced_event_id, current_tick, vr["validation_log"],
-    )
 
     # ── Step 7: Print result ─────────────────────────────────────────────────
 
