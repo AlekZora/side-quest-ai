@@ -32,6 +32,40 @@ directly to it."
 Test: player asks "how did they know that?"
 Failure: player accepts quest without reading it.
 
+## Setting direction (decided 2026-07-24)
+World / content foundation: **Greek mythology.** The player is an 
+original mortal — a "nobody" by mythic standards — living in the 
+margins of the canonical myths. Famous hero-arcs (Heracles' labours, 
+Jason's voyage, Theseus' road to Athens) run as fixed canonical 
+backdrop; the AI generates the *player's* side quests around them. 
+Recognition moment reframed: the mythic world notices someone it had 
+no reason to notice.
+
+Why it fits the system (structural, not aesthetic):
+1. Myth corpus = ready-made relational world-model / consistent fact 
+   DB. Anchor source: Apollodorus's *Library* (ingested 2026-07-23); 
+   see wiki/concepts/genealogy-as-knowledge-graph.md.
+2. Genre is natively variant-tolerant ("according to some… according 
+   to others…") — generative variance reads as canon, not hallucination.
+3. Myth's moral engine (xenia, hubris/nemesis, enforced oaths, delayed 
+   divine consequence) already IS the experience goal.
+
+Maps onto the "Key constraints" below: canonical hero-arcs = the fixed, 
+human-authored main story; player side quests = the generated margin. 
+Two-tier canon (immutable spine vs. mutable margin) → simulator holds 
+canonical events as fixed facts; planner generates around them; 
+validator must encode the canonical spine.
+
+Top risks to manage: (1) tone / content curation — source is very dark, 
+the LLM will drift there; lean stylized / mythic-abstract + curation 
+layer. (2) Scope creep — scope the demo to ONE locale with one canonical 
+arc as backdrop. Candidate locale (NOT locked): road from Troezen to 
+Athens (Theseus's road-clearing chain).
+
+Not yet locked: locale, player-character specifics, tone treatment. 
+Does NOT change the current build step — still Step 7 (Godot). 
+Full reasoning: wiki/decisions/decision-log.md (2026-07-24 entry).
+
 ## What has been built
 - quest-generator-v1.py — working, tested on 5 states
 - test-states.json — 5 validated game state variations

@@ -13,6 +13,10 @@ env/
 # Database — generated locally by init_db.py + seed_db.py
 blackwater.db
 
+# Godot — editor import/cache folder, regenerated on open
+.godot/
+*.translation
+
 # OS
 .DS_Store
 Thumbs.db

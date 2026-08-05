@@ -263,14 +263,62 @@ This is the strongest area. The wiki has a coherent and well-grounded theory of 
 
 Given 5-month runway and cousin as technical co-lead, this is the recommended sequence:
 
-1. **Write the experience goal statement.** One sentence. Everything filters through it.
-2. **Build the standalone generation test harness.** No game engine. Just state → API → quest. Answers latency, cost, and template questions simultaneously.
-3. **Define minimum game state JSON schema.** Force the minimum — 5 fields. Expand with evidence.
-4. **Define minimum NPC schema.** Same approach — 5 fields, test, expand.
-5. **Write 3 quest templates.** One for each of: main quest escalation, NPC personal crisis, player-choice callback.
-6. **Design the fact database schema.** Categories of hard constraints. Build the validator.
-7. **Set up Godot project.** Only after the generation system is tested outside the game.
-8. **Design the Q6 experiment.** Protocol for measuring whether quests feel personal.
+1. ✅ **Write the experience goal statement.** One sentence. Everything filters through it.
+2. ✅ **Build the standalone generation test harness.** No game engine. Just state → API → quest. Answers latency, cost, and template questions simultaneously.
+3. ✅ **Define minimum game state JSON schema.** Force the minimum — 5 fields. Expand with evidence.
+4. ✅ **Define minimum NPC schema.** Same approach — 5 fields, test, expand.
+5. ✅ **Write 3 quest templates.** One for each of: main quest escalation, NPC personal crisis, player-choice callback. *(Four shipped — world texture added.)*
+6. ✅ **Design the fact database schema.** Categories of hard constraints. Build the validator.
+7. ✅ **Set up Godot project.** Only after the generation system is tested outside the game.
+8. ⬜ **Design the Q6 experiment.** Protocol for measuring whether quests feel personal. **← active step**
+
+---
+
+## Status Update — 2026-08-05: Step 7 complete
+
+Steps 1–7 of the priority order above are done. This report was written
+as a greenfield assessment on 2026-06-03; the analysis below is left as
+written, and this section records what was actually built against it.
+
+**What Step 7 turned out to be.** The report anticipated "set up Godot
+project" as a single item. In practice it split into two halves joined
+by a transport decision:
+
+- **FastAPI bridge** (`prototype/server.py`) — the engine talks to Python
+  over localhost HTTP. `GET /health` returns world state and costs no
+  tokens; `POST /generate-quest` runs the full pipeline and returns the
+  quest plus `validation_status`, `attempts`, and an `attempt_log`.
+  Chosen over subprocess and GDExtension because a web export for
+  itch.io needs HTTP anyway — see section 6, which flagged the engine
+  decision as the most consequential unresolved item.
+- **Godot 4.7.1 client** (`godot/`) — placeholder player (arrow keys),
+  a stationary NPC, an `Area2D` talk zone, and a dialogue panel. Walk
+  into the zone, press E, and the generated quest renders in-engine.
+
+**Round trip verified end to end**, with a quest that passed every hard
+constraint rather than merely returning 200:
+
+    [bridge] POST http://localhost:8000/generate-quest
+    [bridge] HTTP status code: 200
+    [bridge] npc=Otto template=personal_crisis validation=passed attempts=1
+    [bridge]   attempt 1: failed=none retried=false — passed on attempt 1
+
+Godot → HTTP → Python → SQLite → Claude → validator → back to the engine
+canvas. The pipeline the report describes in theory now runs in a game
+window.
+
+**Also built along the way, not anticipated here:** a conditional retry
+that re-samples only when the failing check is sampling-dependent (C3,
+C4) and refuses to spend a second API call on deterministic failures
+(C1, C5), plus fixes to three classes of C3 false positive and one C1
+format bug that made every markdown-headed quest read as structurally
+broken.
+
+**Active step: 8 — the Q6 experiment protocol.** Section 5 of this
+report is the one that still stands unanswered: there is no instrument
+for measuring whether a generated quest feels personal. The system can
+now produce validated quests on demand inside the engine, which is
+exactly the precondition that experiment needs.
 
 ---
 

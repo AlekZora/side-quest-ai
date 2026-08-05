@@ -90,20 +90,29 @@ the target, not current behaviour.
 | Four quest templates | ✅ Complete |
 | Fact database + hard constraint validator | ✅ Complete |
 | FastAPI bridge (`/health`, `/generate-quest`) | ✅ Complete |
-| Godot setup | 🟡 In progress |
-| Q6 experiment protocol | ⬜ Upcoming |
+| Godot setup | ✅ Complete |
+| Q6 experiment protocol | 🟡 Active |
 
 The HTTP bridge is proven end to end: `GET /health` returns world state,
 and `POST /generate-quest` returns a quest that passes every hard
 constraint (C1 structure, C3 existence, C4 state, C5 causation) and is
 written to the database as `validated`.
 
-The Godot client has made its first successful call. Running the demo
-project in Godot 4.7.1 against a local server prints HTTP 200 and the
-`/health` body to the engine console, with the matching request in the
-uvicorn log — confirming Godot → HTTP → Python → SQLite from inside the
-engine, not just from `curl`. It has not yet called `/generate-quest` or
-displayed a quest; that is the next step.
+The Godot client makes the full call. In Godot 4.7.1, the player walks
+into the NPC's talk zone, presses E, and the generated quest renders on
+screen in the dialogue panel — Godot → HTTP → Python → SQLite → Claude →
+validator → back to the engine canvas. The verified round trip returned
+a quest that passed every hard constraint on the first attempt:
+
+```
+[bridge] POST http://localhost:8000/generate-quest
+[bridge] HTTP status code: 200
+[bridge] npc=Otto template=personal_crisis validation=passed attempts=1
+[bridge]   attempt 1: failed=none retried=false — passed on attempt 1
+```
+
+Visuals are placeholder — coloured rectangles, no art. The engine client
+is the transport proof, not the game.
 
 ## Repository Structure
 
@@ -119,6 +128,10 @@ All runnable code lives under `prototype/`.
 │   ├── seed_db.py               # Database seeding (Blackwater world)
 │   ├── test-states.json         # 5 validated game state inputs
 │   └── requirements.txt         # Python dependencies
+├── godot/                       # Godot 4.7.1 client (placeholder visuals)
+│   ├── project.godot
+│   ├── Main.tscn                # Player, NPC + talk zone, dialogue panel
+│   └── Main.gd                  # Movement, interact, HTTP calls
 ├── fact-database-design.md      # Schema, constraints, validation pipeline
 ├── quest-templates.md           # The four quest templates
 ├── build-log.md                 # Chronological build log
@@ -179,6 +192,41 @@ curl -X POST http://localhost:8000/generate-quest \
 `/health` is free — no API call, no tokens. `/generate-quest` returns the
 quest text plus `validation_status`, `attempts`, and an `attempt_log`
 recording why each draft was or was not retried.
+
+## Running the demo
+
+The engine client lives in `godot/`. Built and verified with Godot 4.7.1.
+
+1. **Start the server.** From `prototype/`, with `ANTHROPIC_API_KEY` set
+   in that shell:
+
+   ```bash
+   uvicorn server:app --port 8000
+   ```
+
+2. **Open the Godot project.** Point the Godot project manager at the
+   `godot/` folder and let it import.
+
+3. **Press play** (F5). The console prints the `/health` round trip
+   immediately:
+
+   ```
+   [bridge] GET http://localhost:8000/health
+   [bridge] HTTP status code: 200
+   [bridge] response body: {"ok":true,"npc_count":7,"tick":50}
+   ```
+
+4. **Walk the blue square into the orange one** using the arrow keys.
+   Inside the NPC's talk zone the dialogue panel shows `Press E to talk`.
+
+5. **Press E.** The panel shows `...` while the request is in flight —
+   expect 20–40 seconds, since this is a real Claude call and may retry
+   once — then the generated quest renders in the panel.
+
+If the panel shows `ERROR: ...`, the server is not running or not
+reachable; the console carries the underlying result code. A quest can
+render with `validation_status: failed_validation` — the console
+`attempt_log` lines say which hard constraint failed on each draft.
 
 ## License
 
