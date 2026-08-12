@@ -978,3 +978,59 @@ experiment needed.
 3. Optional cleanups: C3 still flags unknown place names like "District
    Office" — decide whether those seed the entity table instead of
    failing; persist attempt_log into the quests table for experiment data.
+
+---
+
+## 2026-08-12 — Repo reorganisation: code out of the vault
+
+### Completed
+- **All runnable code now lives in the git repo.** The vault keeps prose
+  only — concept pages, design docs, gap report, this log.
+    ~/side-quest-ai/prototype/  — Python (server, pipeline, generator,
+                                  validator, init_db, seed_db)
+    ~/side-quest-ai/godot/      — Godot 4.7.1 client
+    ~/sqa-venv                  — virtualenv, deliberately outside the project
+    blackwater.db               — gitignored, rebuilt via init_db + seed_db
+- **Deleted:** `wiki/projects/game/prototype/` and `~/blackwater-demo/`.
+  Before deleting, all 11 source files were verified identical to the
+  committed copies by MD5, with the repo working tree clean at the pushed
+  commit 1901de9. Nothing unique was lost from the code.
+
+### The one thing that was NOT a duplicate: blackwater.db
+`blackwater.db` is gitignored, so it was never in the repo, and the two
+databases had **diverged** — neither was a superset of the other:
+
+    wiki copy : 13 quests, 6 validated
+    repo copy :  8 quests, 2 validated
+    rows 1-6 agree; row 7 and row 8 have OPPOSITE validation outcomes
+
+Same templates, same trigger, different results — which is what running
+the same pipeline against two separate databases produces. The wiki copy
+was archived before deletion to:
+
+    ~/blackwater-wiki-archive.db   (122,880 bytes, 13 quests / 6 validated)
+
+**Open decision for Step 8:** which database is the source of truth. The
+repo's current blackwater.db is not "the" history — it is whichever one
+happened to be on disk. If Q6 wants a corpus of generated quests with
+their validation results, the archive is the larger sample (13 vs 8) and
+the choice should be made deliberately rather than inherited.
+
+### Stale rule worth fixing
+CLAUDE.md's Build Log Rule is scoped to "code and prototype work inside
+wiki/projects/game/" — a directory that no longer contains code. As
+written the rule can never fire again, so build-log entries for repo work
+would silently stop. Rewrite the scope to ~/side-quest-ai/ when next
+editing that file. (This entry was written by hand, outside the rule.)
+
+### Current step
+Step 8 — Q6 experiment protocol. Unchanged; no code was written this
+session, only relocation.
+
+### Next session starts here
+1. Ingest the Façade postmortem (flagged since 2026-06-15) — highest-value
+   pending source for Q6 experiment design.
+2. Decide the blackwater.db source of truth (archive vs repo copy).
+3. Write 3 handcrafted quests for one scenario, generate 3 from the same
+   scenario, interleave, define the questions and the success criterion.
+4. Fix the CLAUDE.md Build Log Rule scope.
