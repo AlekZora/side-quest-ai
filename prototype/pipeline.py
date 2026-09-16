@@ -10,9 +10,31 @@ ready for the quest generator.
 import json
 import os
 
+import openai
+
 MAIN_QUEST      = "Rescue Elena from the Syndicate"
 PLAYER_ENTITY_ID = 6
 COOLDOWN_WINDOW  = 5    # recent quest rows to check for NPC cooldown
+EMBEDDING_MODEL  = "text-embedding-3-small"
+
+_openai_client = None
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = openai.OpenAI()
+    return _openai_client
+
+
+def embed_text(text):
+    """Embed text via OpenAI text-embedding-3-small (1536 dims)."""
+    response = _get_openai_client().embeddings.create(model=EMBEDDING_MODEL, input=text)
+    return response.data[0].embedding
+
+
+def _vector_literal(embedding):
+    return "[" + ",".join(str(x) for x in embedding) + "]"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -210,10 +232,13 @@ def select_best_pair(conn, candidates, current_tick):
 
 # ── A5: Game state assembly ───────────────────────────────────────────────
 
-def build_npc_knowledge_text(conn, npc_id, trigger_action):
+def build_npc_knowledge_text_keyword(conn, npc_id, trigger_action):
     """
     Build the npc_knowledge string for the game state.
-    Prioritises knowledge of the triggering event; falls back to most recent knowledge.
+    Prioritises knowledge of the triggering event, matched by a raw substring
+    LIKE against the first 30 characters of the trigger; falls back to most
+    recent knowledge. Kept alongside build_npc_knowledge_text (semantic) for
+    comparison — see compare_knowledge_retrieval.py.
     """
     # Try to find knowledge of an event that matches the trigger
     trigger_rows = conn.execute("""
@@ -225,6 +250,51 @@ def build_npc_knowledge_text(conn, npc_id, trigger_action):
         ORDER BY e."when" DESC
         LIMIT 1
     """, (npc_id, f"%{trigger_action[:30]}%")).fetchall()
+
+    # Fall back to three most recent knowledge rows
+    recent_rows = conn.execute("""
+        SELECT e.what, k.channel, k.confidence
+        FROM npc_knowledge k
+        JOIN events e ON e.id = k.event_id
+        WHERE k.npc_id = %s
+        ORDER BY e."when" DESC
+        LIMIT 3
+    """, (npc_id,)).fetchall()
+
+    rows = trigger_rows if trigger_rows else recent_rows
+    if not rows:
+        return "No documented knowledge of recent events."
+
+    parts = []
+    for what, channel, conf in rows:
+        parts.append(f"Learned via {channel} (confidence {conf:.1f}): {what}.")
+    return " ".join(parts)
+
+
+def build_npc_knowledge_text(conn, npc_id, trigger_action):
+    """
+    Build the npc_knowledge string for the game state.
+    Prioritises knowledge of the triggering event, matched by embedding
+    similarity (cosine distance) against events.embedding; falls back to
+    most recent knowledge when the NPC has no embedded events to rank
+    (embedding column NULL — backfill not run, or the event predates it).
+
+    Filters by the npc_knowledge join first (this NPC's known events only),
+    then ranks the result by similarity — never ranks across events the NPC
+    doesn't actually know about.
+    """
+    trigger_embedding = _vector_literal(embed_text(trigger_action))
+
+    # Try to find the known event closest in meaning to the trigger
+    trigger_rows = conn.execute("""
+        SELECT e.what, k.channel, k.confidence
+        FROM npc_knowledge k
+        JOIN events e ON e.id = k.event_id
+        WHERE k.npc_id = %s
+          AND e.embedding IS NOT NULL
+        ORDER BY e.embedding <=> %s::vector
+        LIMIT 1
+    """, (npc_id, trigger_embedding)).fetchall()
 
     # Fall back to three most recent knowledge rows
     recent_rows = conn.execute("""
