@@ -24,9 +24,28 @@ ENT_MIKHAIL             = 12   # Daria's son — referenced in stake
 ENT_SUPPLY_MANIFEST     = 13   # destroyed at tick 50
 
 # Event IDs
-EVT_WOMAN_AT_GATE       = 1    # tick 20 — Otto's callback target (high)
-EVT_CURFEW_BRIBE        = 2    # tick 30 — medium significance
-EVT_MANIFEST_BURNED     = 3    # tick 50 — high, triggers all four NPCs
+EVT_WOMAN_AT_GATE            = 1    # tick 20 — Otto's callback target (high)
+EVT_CURFEW_BRIBE             = 2    # tick 30 — medium significance
+EVT_MANIFEST_BURNED          = 3    # tick 50 — high, triggers all four NPCs
+
+# Backstory / world-texture events added to give retrieval something to
+# discriminate between (originally only 3 events existed, too few for a
+# recency fallback to ever miss).
+EVT_CHECKPOINT_RECONFIG      = 4    # tick 5  — root cause of Reiner Alley's restriction
+EVT_SUPERVISOR_QUOTA         = 5    # tick 8  — Otto's contract-renewal pressure
+EVT_DARIA_HUSBAND_LOCATED    = 6    # tick 10 — Daria's want, partially answered
+EVT_SERGE_URGENCY_CODE       = 7    # tick 12 — Serge's network, in action
+EVT_NADIA_TURNED_AWAY_AGAIN  = 8    # tick 14 — Nadia's blocker, recurring
+EVT_MARTA_COSIGNED           = 9    # tick 2  — origin of Serge's stake
+EVT_MIKHAIL_ASKED_ENROLLMENT = 10   # tick 45 — Daria's stake, activated
+EVT_OTTO_STALL_REVIEW        = 11   # tick 18 — Otto's stake, threatened
+EVT_RESISTANCE_SIGHTING      = 12   # tick 22 — world texture, spreads by rumor
+EVT_HOLDING_OVERCROWDING     = 13   # tick 25 — world texture, ties to Otto's lore
+EVT_UNIFORM_RUSH_ORDER       = 14   # tick 28 — Daria's network, in action
+EVT_NADIA_MAP_PROGRESS       = 15   # tick 32 — Nadia's own work
+EVT_CHECKPOINT_GUARD_BRIBE   = 16   # tick 35 — Otto's network, in action
+EVT_SUPPLY_SHORTAGE_RUMOR    = 17   # tick 38 — district-wide rumor
+EVT_SERGE_SUPERVISOR_MEETING = 18   # tick 42 — Serge's network, unexplained
 
 
 def already_seeded(conn):
@@ -276,6 +295,173 @@ def seed_events(conn):
             "high",
             json.dumps([]),
         ),
+        (
+            EVT_CHECKPOINT_RECONFIG, "world_event",
+            "The Syndicate reconfigured checkpoint routing across the district and"
+            " reclassified Reiner Alley as restricted, without publishing a reason",
+            5,
+            LOC_REINER_ALLEY,
+            None,
+            json.dumps([]),
+            "high",
+            json.dumps([]),
+        ),
+        (
+            EVT_SUPERVISOR_QUOTA, "npc_action",
+            "Otto's supervisor raised the checkpoint's flagging quota and told him the"
+            " contract renewal depended on producing more resistance-contact names",
+            8,
+            LOC_EASTERN_GATE,
+            None,
+            json.dumps([ENT_OTTO]),
+            "medium",
+            json.dumps([]),
+        ),
+        (
+            EVT_DARIA_HUSBAND_LOCATED, "npc_action",
+            "An officer picking up an altered uniform told Daria that her husband's"
+            " transfer paperwork had finally surfaced, routed through the Holding"
+            " Facility before he was sent to a labor assignment outside the district",
+            10,
+            LOC_CLOTH_MERCHANT,
+            None,
+            json.dumps([ENT_DARIA]),
+            "high",
+            json.dumps([]),
+        ),
+        (
+            EVT_SERGE_URGENCY_CODE, "npc_action",
+            "Serge handled a routing packet stamped with the same urgency code he had"
+            " seen twice before a prisoner transfer, addressed to the Holding Facility",
+            12,
+            LOC_NORTHERN_DISTRICT,
+            ENT_SERGE,
+            json.dumps([ENT_SERGE]),
+            "medium",
+            json.dumps([]),
+        ),
+        (
+            EVT_NADIA_TURNED_AWAY_AGAIN, "npc_action",
+            "Nadia was turned away from Reiner Alley for the second time, told by the"
+            " checkpoint guard that she lacked the authorization the reconfiguration"
+            " now required",
+            14,
+            LOC_REINER_ALLEY,
+            ENT_NADIA,
+            json.dumps([ENT_NADIA]),
+            "low",
+            json.dumps([]),
+        ),
+        (
+            EVT_MARTA_COSIGNED, "npc_action",
+            "Marta co-signed Serge's hiring paperwork for the Syndicate courier"
+            " position, vouching for him without knowing who he would become in the role",
+            2,
+            LOC_NORTHERN_DISTRICT,
+            ENT_MARTA,
+            json.dumps([ENT_SERGE]),
+            "medium",
+            json.dumps([]),
+        ),
+        (
+            EVT_MIKHAIL_ASKED_ENROLLMENT, "npc_action",
+            "Mikhail asked Daria how old he would need to be to apply for Syndicate"
+            " youth enrollment",
+            45,
+            LOC_CLOTH_MERCHANT,
+            ENT_MIKHAIL,
+            json.dumps([ENT_DARIA]),
+            "high",
+            json.dumps([]),
+        ),
+        (
+            EVT_OTTO_STALL_REVIEW, "world_event",
+            "The gate administration announced that stall licenses would be reviewed"
+            " alongside contractor renewals this cycle",
+            18,
+            LOC_EASTERN_GATE,
+            None,
+            json.dumps([ENT_OTTO]),
+            "medium",
+            json.dumps([]),
+        ),
+        (
+            EVT_RESISTANCE_SIGHTING, "world_event",
+            "An unidentified courier was seen exchanging papers near the Northern"
+            " District Office loading dock before slipping into the crowd",
+            22,
+            LOC_NORTHERN_DISTRICT,
+            None,
+            json.dumps([ENT_SERGE]),
+            "medium",
+            json.dumps([]),
+        ),
+        (
+            EVT_HOLDING_OVERCROWDING, "world_event",
+            "The Holding Facility exceeded its usual capacity, and transfers to Outer"
+            " City custody accelerated to make room",
+            25,
+            LOC_HOLDING_FACILITY,
+            None,
+            json.dumps([]),
+            "high",
+            json.dumps([]),
+        ),
+        (
+            EVT_UNIFORM_RUSH_ORDER, "npc_action",
+            "A junior officer paid cash for a rush alteration on a dress uniform, the"
+            " kind ordered before a disciplinary hearing",
+            28,
+            LOC_CLOTH_MERCHANT,
+            None,
+            json.dumps([ENT_DARIA]),
+            "low",
+            json.dumps([]),
+        ),
+        (
+            EVT_NADIA_MAP_PROGRESS, "npc_action",
+            "Nadia completed the survey of the seventh eastern district section,"
+            " leaving only Reiner Alley and one street outstanding",
+            32,
+            LOC_CLOTH_MERCHANT,
+            ENT_NADIA,
+            json.dumps([ENT_NADIA]),
+            "low",
+            json.dumps([]),
+        ),
+        (
+            EVT_CHECKPOINT_GUARD_BRIBE, "npc_action",
+            "A merchant was seen paying the eastern gate guard directly to skip the"
+            " inspection line",
+            35,
+            LOC_EASTERN_GATE,
+            None,
+            json.dumps([ENT_OTTO]),
+            "low",
+            json.dumps([]),
+        ),
+        (
+            EVT_SUPPLY_SHORTAGE_RUMOR, "world_event",
+            "Word spread through the district that Syndicate supply shipments had been"
+            " delayed for a second week",
+            38,
+            LOC_NORTHERN_DISTRICT,
+            None,
+            json.dumps([]),
+            "medium",
+            json.dumps([]),
+        ),
+        (
+            EVT_SERGE_SUPERVISOR_MEETING, "npc_action",
+            "Serge's supervisor called an unscheduled meeting with all three district"
+            " couriers, then cancelled it without explanation",
+            42,
+            LOC_NORTHERN_DISTRICT,
+            None,
+            json.dumps([ENT_SERGE]),
+            "medium",
+            json.dumps([]),
+        ),
     ]
     cur = conn.cursor()
     cur.executemany(
@@ -284,7 +470,7 @@ def seed_events(conn):
         rows
     )
     conn.commit()
-    print("  3 events.")
+    print(f"  {len(rows)} events.")
 
 
 def seed_player_choices(conn):
@@ -315,6 +501,43 @@ def seed_npc_knowledge(conn):
         (ENT_DARIA, EVT_MANIFEST_BURNED, "told_by",   None, 0.8, 50),
         # Nadia: overheard two guards at the warehouse checkpoint
         (ENT_NADIA, EVT_MANIFEST_BURNED, "rumor",     None, 0.4, 50),
+
+        # Otto — sees everyone at his own checkpoint; witnessed-heavy by nature
+        (ENT_OTTO,  EVT_CHECKPOINT_RECONFIG,     "witnessed", None, 1.0, 5),
+        (ENT_OTTO,  EVT_SUPERVISOR_QUOTA,        "witnessed", None, 1.0, 8),
+        (ENT_OTTO,  EVT_OTTO_STALL_REVIEW,       "witnessed", None, 1.0, 18),
+        (ENT_OTTO,  EVT_RESISTANCE_SIGHTING,     "rumor",     None, 0.3, 23),
+        (ENT_OTTO,  EVT_HOLDING_OVERCROWDING,    "told_by",   None, 0.6, 26),
+        (ENT_OTTO,  EVT_CHECKPOINT_GUARD_BRIBE,  "witnessed", None, 1.0, 35),
+        (ENT_OTTO,  EVT_SUPPLY_SHORTAGE_RUMOR,   "rumor",     None, 0.4, 39),
+
+        # Serge — courier network: hears routing/supervisor chatter, some direct
+        (ENT_SERGE, EVT_CHECKPOINT_RECONFIG,       "told_by",   None, 0.6, 6),
+        (ENT_SERGE, EVT_SUPERVISOR_QUOTA,          "rumor",     None, 0.3, 9),
+        (ENT_SERGE, EVT_SERGE_URGENCY_CODE,        "witnessed", None, 1.0, 12),
+        (ENT_SERGE, EVT_MARTA_COSIGNED,            "witnessed", None, 1.0, 2),
+        (ENT_SERGE, EVT_RESISTANCE_SIGHTING,       "witnessed", None, 0.7, 22),
+        (ENT_SERGE, EVT_HOLDING_OVERCROWDING,      "told_by",   None, 0.7, 27),
+        (ENT_SERGE, EVT_SUPPLY_SHORTAGE_RUMOR,     "rumor",     None, 0.5, 40),
+        (ENT_SERGE, EVT_SERGE_SUPERVISOR_MEETING,  "witnessed", None, 1.0, 42),
+
+        # Daria — alterations shop: hears officer gossip, some direct/personal
+        (ENT_DARIA, EVT_CHECKPOINT_RECONFIG,       "rumor",     None, 0.2, 7),
+        (ENT_DARIA, EVT_DARIA_HUSBAND_LOCATED,     "witnessed", None, 1.0, 10),
+        (ENT_DARIA, EVT_MIKHAIL_ASKED_ENROLLMENT,  "witnessed", None, 1.0, 45),
+        (ENT_DARIA, EVT_RESISTANCE_SIGHTING,       "rumor",     None, 0.3, 24),
+        (ENT_DARIA, EVT_HOLDING_OVERCROWDING,      "rumor",     None, 0.3, 28),
+        (ENT_DARIA, EVT_UNIFORM_RUSH_ORDER,        "witnessed", None, 1.0, 28),
+        (ENT_DARIA, EVT_SUPPLY_SHORTAGE_RUMOR,     "rumor",     None, 0.4, 41),
+
+        # Nadia — cartographer: mostly rumor/told_by, direct only for her own work
+        (ENT_NADIA, EVT_CHECKPOINT_RECONFIG,        "told_by",   None, 0.6, 15),
+        (ENT_NADIA, EVT_SUPERVISOR_QUOTA,           "rumor",     None, 0.2, 19),
+        (ENT_NADIA, EVT_NADIA_TURNED_AWAY_AGAIN,    "witnessed", None, 1.0, 14),
+        (ENT_NADIA, EVT_RESISTANCE_SIGHTING,        "rumor",     None, 0.2, 25),
+        (ENT_NADIA, EVT_HOLDING_OVERCROWDING,       "rumor",     None, 0.3, 30),
+        (ENT_NADIA, EVT_NADIA_MAP_PROGRESS,         "witnessed", None, 1.0, 32),
+        (ENT_NADIA, EVT_SUPPLY_SHORTAGE_RUMOR,      "rumor",     None, 0.3, 43),
     ]
     cur = conn.cursor()
     cur.executemany(
@@ -323,7 +546,7 @@ def seed_npc_knowledge(conn):
         rows
     )
     conn.commit()
-    print("  6 npc_knowledge rows.")
+    print(f"  {len(rows)} npc_knowledge rows.")
 
 
 def seed_relationships(conn):
