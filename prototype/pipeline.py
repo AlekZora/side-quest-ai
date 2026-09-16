@@ -8,10 +8,7 @@ ready for the quest generator.
 """
 
 import json
-import sqlite3
 import os
-
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blackwater.db")
 
 MAIN_QUEST      = "Rescue Elena from the Syndicate"
 PLAYER_ENTITY_ID = 6
@@ -43,8 +40,8 @@ def get_candidate_npcs(conn, player_location_id):
         FROM entities
         WHERE type = 'npc'
           AND status = 'alive'
-          AND location_id = ?
-          AND id != ?
+          AND location_id = %s
+          AND id != %s
     """, (player_location_id, PLAYER_ENTITY_ID)).fetchall()
 
     return [
@@ -63,7 +60,7 @@ def get_eligible_templates(conn, npc):
     # escalation: NPC has documented knowledge with confidence >= 0.5
     has_knowledge = conn.execute("""
         SELECT COUNT(*) FROM npc_knowledge
-        WHERE npc_id = ? AND confidence >= 0.5
+        WHERE npc_id = %s AND confidence >= 0.5
     """, (npc_id,)).fetchone()[0]
     if has_knowledge:
         eligible.append("escalation")
@@ -80,7 +77,7 @@ def get_eligible_templates(conn, npc):
         JOIN npc_knowledge nk ON nk.event_id = pc.event_id
         WHERE pc.significance = 'high'
           AND pc.callback_used = 0
-          AND nk.npc_id = ?
+          AND nk.npc_id = %s
           AND nk.confidence >= 0.5
         LIMIT 1
     """, (npc_id,)).fetchone()
@@ -109,8 +106,8 @@ def score_pair(conn, npc, template, current_tick):
     # NPC cooldown — penalise if this NPC appears in the last COOLDOWN_WINDOW quests
     recent_count = conn.execute("""
         SELECT COUNT(*) FROM (
-            SELECT npc_id FROM quests ORDER BY id DESC LIMIT ?
-        ) t WHERE t.npc_id = ?
+            SELECT npc_id FROM quests ORDER BY id DESC LIMIT %s
+        ) t WHERE t.npc_id = %s
     """, (COOLDOWN_WINDOW, npc_id)).fetchone()[0]
     cooldown = 0.2 if recent_count > 0 else 1.0
     score   *= cooldown
@@ -127,7 +124,7 @@ def score_pair(conn, npc, template, current_tick):
     # Trust gradient — check relationship NPC → player
     rel = conn.execute("""
         SELECT type, strength FROM relationships
-        WHERE from_id = ? AND to_id = ?
+        WHERE from_id = %s AND to_id = %s
     """, (npc_id, PLAYER_ENTITY_ID)).fetchone()
     if rel:
         rel_type, strength = rel
@@ -152,7 +149,7 @@ def score_pair(conn, npc, template, current_tick):
             JOIN npc_knowledge nk ON nk.event_id = pc.event_id
             WHERE pc.significance = 'high'
               AND pc.callback_used = 0
-              AND nk.npc_id = ?
+              AND nk.npc_id = %s
               AND nk.confidence >= 0.5
             ORDER BY e."when" DESC
             LIMIT 1
@@ -223,8 +220,8 @@ def build_npc_knowledge_text(conn, npc_id, trigger_action):
         SELECT e.what, k.channel, k.confidence
         FROM npc_knowledge k
         JOIN events e ON e.id = k.event_id
-        WHERE k.npc_id = ?
-          AND LOWER(e.what) LIKE LOWER(?)
+        WHERE k.npc_id = %s
+          AND LOWER(e.what) LIKE LOWER(%s)
         ORDER BY e."when" DESC
         LIMIT 1
     """, (npc_id, f"%{trigger_action[:30]}%")).fetchall()
@@ -234,7 +231,7 @@ def build_npc_knowledge_text(conn, npc_id, trigger_action):
         SELECT e.what, k.channel, k.confidence
         FROM npc_knowledge k
         JOIN events e ON e.id = k.event_id
-        WHERE k.npc_id = ?
+        WHERE k.npc_id = %s
         ORDER BY e."when" DESC
         LIMIT 3
     """, (npc_id,)).fetchall()
@@ -264,7 +261,7 @@ def build_player_history(conn, npc_id, current_tick):
         LEFT JOIN entities l ON l.id = e.location_id
         WHERE pc.significance = 'high'
           AND pc.callback_used = 0
-          AND nk.npc_id = ?
+          AND nk.npc_id = %s
           AND nk.confidence >= 0.5
         ORDER BY e."when" ASC
         LIMIT 3
@@ -295,7 +292,7 @@ def get_referenced_choice(conn, npc_id, current_tick):
         LEFT JOIN entities l ON l.id = e.location_id
         WHERE pc.significance = 'high'
           AND pc.callback_used = 0
-          AND nk.npc_id = ?
+          AND nk.npc_id = %s
           AND nk.confidence >= 0.5
         ORDER BY e."when" DESC
         LIMIT 1
@@ -342,7 +339,7 @@ def pre_check(conn, npc, player_location_id):
     Returns (True, "ok") or (False, reason_string).
     """
     row = conn.execute(
-        "SELECT status, location_id FROM entities WHERE id = ?", (npc["id"],)
+        "SELECT status, location_id FROM entities WHERE id = %s", (npc["id"],)
     ).fetchone()
 
     if not row:
@@ -351,13 +348,13 @@ def pre_check(conn, npc, player_location_id):
         return False, f"{npc['name']} is not alive (status={row[0]})"
     if row[1] != player_location_id:
         npc_loc = conn.execute(
-            "SELECT name FROM entities WHERE id = ?", (row[1],)
+            "SELECT name FROM entities WHERE id = %s", (row[1],)
         ).fetchone()
         loc_name = npc_loc[0] if npc_loc else f"id={row[1]}"
         return False, f"{npc['name']} is at {loc_name}, not at player location"
 
     has_knowledge = conn.execute(
-        "SELECT COUNT(*) FROM npc_knowledge WHERE npc_id = ?", (npc["id"],)
+        "SELECT COUNT(*) FROM npc_knowledge WHERE npc_id = %s", (npc["id"],)
     ).fetchone()[0]
     if not has_knowledge:
         return False, f"{npc['name']} has no documented knowledge of any events"
@@ -408,14 +405,17 @@ def run_pipeline(conn, player_action: str, player_location_id: int):
 # ── Test ──────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
+    import psycopg
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+    conn = psycopg.connect(os.environ["DATABASE_URL"])
 
     player_location_id = get_player_location(conn)  # reads from player table
     trigger_action     = "Bribed the eastern gate guard to pass through after curfew"
 
     loc_name = conn.execute(
-        "SELECT name FROM entities WHERE id = ?", (player_location_id,)
+        "SELECT name FROM entities WHERE id = %s", (player_location_id,)
     ).fetchone()[0]
 
     print("=== Pipeline test ===")

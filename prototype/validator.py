@@ -6,11 +6,9 @@ are deferred to V2 and require an LLM judge.
 """
 
 import json
-import re
-import sqlite3
 import os
+import re
 
-DB_PATH          = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blackwater.db")
 PLAYER_ENTITY_ID = 6
 
 # Words / partial-sequences that should NOT trigger C3 hallucination warnings.
@@ -239,7 +237,7 @@ def check_c4(conn, quest_text, npc_id):
 
     # Quest giver alive
     row = conn.execute(
-        "SELECT name, status FROM entities WHERE id = ?", (npc_id,)
+        "SELECT name, status FROM entities WHERE id = %s", (npc_id,)
     ).fetchone()
     if not row:
         hard_issues.append(f"quest giver entity id={npc_id} not found in entities")
@@ -296,7 +294,7 @@ def check_c5(conn, template_type, referenced_choice_id):
             )
         else:
             row = conn.execute(
-                "SELECT callback_used FROM player_choices WHERE event_id = ?",
+                "SELECT callback_used FROM player_choices WHERE event_id = %s",
                 (referenced_choice_id,),
             ).fetchone()
             if not row:
@@ -456,8 +454,11 @@ def print_result(label, result):
 
 
 if __name__ == "__main__":
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
+    import psycopg
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+    conn = psycopg.connect(os.environ["DATABASE_URL"])
 
     ENT_OTTO = 9  # entity id from seed_db.py
 

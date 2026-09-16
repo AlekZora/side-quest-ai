@@ -9,8 +9,9 @@ Run:
 """
 
 import os
-import sqlite3
 
+import psycopg
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -18,7 +19,8 @@ from pydantic import BaseModel
 import pipeline
 import quest_generator_v4 as generator
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blackwater.db")
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 app = FastAPI(title="Side Quest AI")
 
@@ -32,9 +34,7 @@ app.add_middleware(
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return psycopg.connect(DATABASE_URL)
 
 
 # ── Contract ──────────────────────────────────────────────────────────────

@@ -14,7 +14,6 @@ Flow:
 import json
 import os
 import re
-import sqlite3
 import sys
 
 import anthropic
@@ -24,8 +23,6 @@ _DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _DIR)
 import pipeline as pipe
 import validator as val
-
-DB_PATH = os.path.join(_DIR, "blackwater.db")
 
 client = anthropic.Anthropic()
 
@@ -38,7 +35,7 @@ def load_npc_for_prompt(conn, npc_id):
     Returns {name, situation, want, stake, network} for prompt builders.
     """
     row = conn.execute(
-        "SELECT name, properties FROM entities WHERE id = ?", (npc_id,)
+        "SELECT name, properties FROM entities WHERE id = %s", (npc_id,)
     ).fetchone()
     if not row:
         raise ValueError(f"NPC id={npc_id} not found in entities")
@@ -68,7 +65,7 @@ def get_referenced_choice_event_id(conn, npc_id):
         JOIN npc_knowledge nk ON nk.event_id = pc.event_id
         WHERE pc.significance = 'high'
           AND pc.callback_used = 0
-          AND nk.npc_id = ?
+          AND nk.npc_id = %s
           AND nk.confidence >= 0.5
         ORDER BY e."when" DESC
         LIMIT 1
@@ -84,16 +81,18 @@ def write_quest(conn, npc_id, template_type, status, quest_text,
         INSERT INTO quests
             (npc_id, template_type, status, generated_text,
              referenced_event_id, created_at, validation_log)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s::quest_template_type, %s::quest_status, %s, %s, %s, %s)
+        RETURNING id
     """, (npc_id, template_type, status, quest_text,
           referenced_event_id, current_tick, validation_log))
+    quest_id = cursor.fetchone()[0]
     if template_type == "callback" and referenced_event_id is not None and status == "validated":
         conn.execute(
-            "UPDATE player_choices SET callback_used = 1 WHERE event_id = ?",
+            "UPDATE player_choices SET callback_used = 1 WHERE event_id = %s",
             (referenced_event_id,)
         )
     conn.commit()
-    return cursor.lastrowid
+    return quest_id
 
 
 # ── Prompt builders (sourced from quest-generator-v3.py) ─────────────────────
@@ -448,15 +447,18 @@ def generate_quest(conn, pipeline_result, max_attempts=2):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
+    import psycopg
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(_DIR, ".env"))
+    conn = psycopg.connect(os.environ["DATABASE_URL"])
 
     trigger_action     = "Bribed the eastern gate guard to pass through after curfew"
     player_location_id = pipe.get_player_location(conn)
     current_tick       = pipe.get_current_tick(conn)
 
     loc_name = conn.execute(
-        "SELECT name FROM entities WHERE id = ?", (player_location_id,)
+        "SELECT name FROM entities WHERE id = %s", (player_location_id,)
     ).fetchone()[0]
 
     print("=" * 62)
