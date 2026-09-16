@@ -1,8 +1,12 @@
 import json
-import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blackwater.db")
+import psycopg
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 # Entity IDs — explicit so relationships and FK refs are readable
 LOC_EASTERN_GATE        = 1
@@ -45,9 +49,10 @@ def seed_locations(conn):
              "reason": "Reclassified after checkpoint reconfiguration. Reason unknown."
          }), 0, 0),
     ]
-    conn.executemany(
+    cur = conn.cursor()
+    cur.executemany(
         "INSERT INTO entities (id, type, name, status, location_id, owner_id, properties, created_at, last_changed_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?)",
+        " VALUES (%s,%s::entity_type,%s,%s,%s,%s,%s,%s,%s)",
         rows
     )
     conn.commit()
@@ -200,16 +205,17 @@ def seed_npcs(conn):
              "note": "Daria's son, age 12. Recently expressed interest in Syndicate youth enrollment."
          }), 0, 0),
     ]
-    conn.executemany(
+    cur = conn.cursor()
+    cur.executemany(
         "INSERT INTO entities (id, type, name, status, location_id, owner_id, properties, created_at, last_changed_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?)",
+        " VALUES (%s,%s::entity_type,%s,%s,%s,%s,%s,%s,%s)",
         rows
     )
 
     # Document: supply manifest — already destroyed when seed runs
     conn.execute(
         "INSERT INTO entities (id, type, name, status, location_id, owner_id, properties, created_at, last_changed_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?)",
+        " VALUES (%s,%s::entity_type,%s,%s,%s,%s,%s,%s,%s)",
         (ENT_SUPPLY_MANIFEST, "document", "Syndicate Supply Manifest", "destroyed",
          LOC_NORTHERN_DISTRICT, None,
          json.dumps({"note": "District supply manifest. Burned by player at tick 50."}),
@@ -222,7 +228,7 @@ def seed_npcs(conn):
 def seed_player(conn):
     conn.execute(
         "INSERT INTO player (id, current_location_id, current_situation, inventory,"
-        " visited_locations, known_facts, reputation_by_faction) VALUES (?,?,?,?,?,?,?)",
+        " visited_locations, known_facts, reputation_by_faction) VALUES (%s,%s,%s,%s,%s,%s,%s)",
         (
             1,
             LOC_EASTERN_GATE,
@@ -271,9 +277,10 @@ def seed_events(conn):
             json.dumps([]),
         ),
     ]
-    conn.executemany(
+    cur = conn.cursor()
+    cur.executemany(
         'INSERT INTO events (id, type, what, "when", location_id, actor_id, witnesses, significance, consequences)'
-        " VALUES (?,?,?,?,?,?,?,?,?)",
+        " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         rows
     )
     conn.commit()
@@ -286,8 +293,9 @@ def seed_player_choices(conn):
         (EVT_CURFEW_BRIBE,     "medium", 0),
         (EVT_MANIFEST_BURNED,  "high",   0),
     ]
-    conn.executemany(
-        "INSERT INTO player_choices (event_id, significance, callback_used) VALUES (?,?,?)",
+    cur = conn.cursor()
+    cur.executemany(
+        "INSERT INTO player_choices (event_id, significance, callback_used) VALUES (%s,%s,%s)",
         rows
     )
     conn.commit()
@@ -308,9 +316,10 @@ def seed_npc_knowledge(conn):
         # Nadia: overheard two guards at the warehouse checkpoint
         (ENT_NADIA, EVT_MANIFEST_BURNED, "rumor",     None, 0.4, 50),
     ]
-    conn.executemany(
+    cur = conn.cursor()
+    cur.executemany(
         "INSERT INTO npc_knowledge (npc_id, event_id, channel, source_npc_id, confidence, learned_at)"
-        " VALUES (?,?,?,?,?,?)",
+        " VALUES (%s,%s,%s::knowledge_channel,%s,%s,%s)",
         rows
     )
     conn.commit()
@@ -339,13 +348,31 @@ def seed_relationships(conn):
         # Nadia's blocker: she knows Reiner Alley but cannot access it
         (ENT_NADIA, LOC_REINER_ALLEY, "knows", None, None, 0),
     ]
-    conn.executemany(
+    cur = conn.cursor()
+    cur.executemany(
         "INSERT INTO relationships (from_id, to_id, type, strength, established_at, last_changed_at)"
-        " VALUES (?,?,?,?,?,?)",
+        " VALUES (%s,%s,%s,%s,%s,%s)",
         rows
     )
     conn.commit()
     print("  11 relationships.")
+
+
+def sync_sequences(conn):
+    """
+    entities/events/player got explicit ids inserted above. SQLite's
+    INTEGER PRIMARY KEY has no separate sequence object, so explicit ids
+    never desync anything there. Postgres identity columns do have one —
+    advance each past the highest seeded id so a future default-value
+    insert doesn't collide with a seeded row.
+    """
+    for table in ("entities", "events", "player"):
+        conn.execute(
+            f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
+            f"(SELECT COALESCE(MAX(id), 1) FROM {table}))"
+        )
+    conn.commit()
+    print("  sequences synced.")
 
 
 def print_counts(conn):
@@ -360,12 +387,11 @@ def print_counts(conn):
 
 
 def main():
-    print(f"Seeding {DB_PATH}\n")
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
+    print(f"Seeding {DATABASE_URL.split('@')[-1]}\n")
+    conn = psycopg.connect(DATABASE_URL)
 
     if already_seeded(conn):
-        print("Database already seeded. Delete blackwater.db and re-run init_db.py to start fresh.")
+        print("Database already seeded. Truncate the tables and re-run init_db.py to start fresh.")
         print_counts(conn)
         conn.close()
         return
@@ -377,6 +403,7 @@ def main():
     seed_player_choices(conn)
     seed_npc_knowledge(conn)
     seed_relationships(conn)
+    sync_sequences(conn)
     print_counts(conn)
     conn.close()
     print("\nSeed complete.")
