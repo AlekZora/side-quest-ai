@@ -96,3 +96,30 @@ necessarily include it at all. The real, generalizable result is
 specificity — semantic retrieval names the one relevant fact; keyword
 matching either finds a literal quote or hands back everything recent
 and lets the model sort it out.
+
+## Confirmed With a Larger World (18 events, Otto knows 10)
+
+The 3-event world above was too small to show a real miss — noted at
+the time. Expanded to 18 events with each of Serge/Daria/Otto/Nadia
+knowing 8-10, spread across witnessed/told_by/rumor with varied
+confidence and learned_at, written as plausible world content rather
+than tuned toward either retrieval method.
+
+Same trigger and NPC as before. Otto's actual matching memory (the
+curfew bribe, tick 30) is now his 4th-most-recent known event out of
+10 — one place outside the keyword fallback's `LIMIT 3`:
+
+- Keyword: no substring match, fell back to the 3 most recent by
+  tick — the manifest burning (50), a supply-shortage rumor (39), and
+  a *different* bribery event, a merchant paying off a guard (35).
+  That last one is a near-miss by topic, not by content — it reads
+  plausible next to the trigger and is wrong. The actual curfew-bribe
+  memory doesn't appear at all.
+- Semantic: matched the curfew-bribe event directly, no fallback
+  needed.
+
+This is the result the first test couldn't produce: keyword retrieval
+doesn't just fail to specify — at this size it actively surfaces a
+wrong, topically-similar answer ahead of the right one. That's a worse
+failure mode than "diluted in a dump," and it's the one that would
+actually mislead a quest generator working from `npc_knowledge`.
