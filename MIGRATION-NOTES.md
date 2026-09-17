@@ -123,3 +123,95 @@ doesn't just fail to specify — at this size it actively surfaces a
 wrong, topically-similar answer ahead of the right one. That's a worse
 failure mode than "diluted in a dump," and it's the one that would
 actually mislead a quest generator working from `npc_knowledge`.
+
+## Phase 3: npc_beliefs — Conclusions, Not Facts
+
+npc_knowledge holds facts an NPC knows about specific events.
+npc_beliefs holds something different: a generalization across facts
+that could turn out wrong. I built this rule-based rather than
+model-based, on purpose — a belief's confidence has to trace back to
+specific event ids a specific NPC actually knows, or "the NPC believes
+X" is just an LLM asserting something ungrounded with extra steps.
+
+**Rules (`beliefs.py`), 3 not the suggested 4.** Dropped "player keeps
+their word" — nothing in the current world depicts the player making
+and keeping a commitment, and I'd rather ship 3 honest rules than 4
+where one is a forced mapping onto unrelated evidence. The 3:
+
+- `player_is_dangerous` — supported by the woman-at-the-gate deception
+  and the manifest burning. Threshold 0.7: low, because per the brief
+  "fear generalizes from less evidence than trust" — a single told_by
+  (0.8) already clears it.
+- `player_can_be_bought` — supported only by the curfew bribe.
+  Threshold 0.75: higher, because this is a specific character claim,
+  not a threat reflex — a rumor alone shouldn't be enough.
+- `player_serves_the_syndicate` — also from the curfew bribe, read
+  paranoidly (comfortable inside Syndicate checkpoint infrastructure =
+  maybe embedded). Threshold 0.35: deliberately thin. This is the
+  belief built to be wrong.
+
+**Confidence is the summed support, capped at 1.0** — `npc_beliefs`
+has a CHECK(confidence <= 1.0) and summed confidence across events can
+exceed 1 easily, so capping is the schema constraint talking, not a
+design choice I'd defend beyond that.
+
+**Contradiction is binary, not graded.** When a rule has
+`contradicting_events` and the NPC's own knowledge includes one, I
+halve the confidence (floor 0.15, never zero) and set
+`contradicting_event_id` — regardless of how strong the contradicting
+evidence is. `player_serves_the_syndicate` is contradicted by the
+manifest burning (destroying Syndicate property is the opposite of
+serving it). I chose halve-not-scale because "one counter-example
+makes an NPC uncertain, not converted" reads as a statement about
+*kind* of change, not magnitude — grading the penalty by contradicting
+confidence would imply the system can tell how *thoroughly* wrong a
+belief is, which it can't from one contradicting fact.
+
+**Idempotency needed a real schema change**: added
+`UNIQUE(npc_id, belief_text)` to `npc_beliefs` so the formation pass
+can `ON CONFLICT ... DO UPDATE` instead of hand-rolling exists-then-
+update logic. Confirmed empirically against Supabase that a repeated
+`ADD CONSTRAINT` raises `duplicate_table` (42P07), not
+`duplicate_object` like the enum-type guards — would have guessed
+wrong and shipped a DO-block that doesn't actually guard anything.
+
+**Demo result** (`demo_beliefs.py`), unforced — this is just what the
+seeded evidence produces:
+
+| NPC   | Evidence                        | Beliefs formed |
+|-------|----------------------------------|----------------|
+| Otto  | witnessed bribe, told_by manifest | dangerous=1.00, can_be_bought=1.00, serves_syndicate=0.50 (contradicted by event 3) |
+| Serge | told_by manifest only             | dangerous=0.80 |
+| Daria | told_by manifest only              | dangerous=0.80 |
+| Nadia | rumor of manifest only             | none — 0.4 < 0.7 threshold |
+
+Same player, same world, four different belief states, purely from who
+learned what and through which channel. Contradiction before/after
+(simulated by evaluating Otto's belief on his knowledge with vs.
+without the manifest-burning event, since in the static seed data both
+facts arrived at once): confidence 1.00 -> 0.50, `contradicting_event_id`
+None -> 3.
+
+**Fed into generation**: `pipeline.assemble_game_state` now includes
+`npc_beliefs` text; all 4 prompt builders in `quest_generator_v4.py`
+get a "What {npc} believes about the player" line. Verified without
+spending API tokens — checked the assembled game state directly and
+called all 4 `PROMPT_BUILDERS` with a synthetic game state.
+
+**Relationship strength now moves on quest outcomes**
+(`update_relationship_from_outcome`, called from `write_quest`):
++0.1 on `validated`, -0.05 on `failed_validation`, capped to [-1, 1].
+Asymmetric on purpose — a failed validation is a generation defect,
+not the player betraying anyone, so it should cost less than a
+validated quest earns. Verified by calling `write_quest()` directly
+(no API call): Otto's trust went 0.5 -> 0.6 -> 0.55.
+
+**What I'd do differently**: the contradiction-before/after demo had
+to simulate "before" by filtering out one event from Otto's real
+knowledge, because the seed data gives him both the supporting and
+contradicting event at once — there's no real temporal "before" state
+in a statically-seeded world. If a later phase adds events arriving
+over time instead of all at once, the formation pass (already a full
+recompute from current knowledge, not a delta) will show real
+before/after without needing a demo script to fake it.
+
