@@ -38,6 +38,15 @@ Forcing a mapping onto an unrelated event would break the provenance
 requirement this whole module exists to satisfy. See MIGRATION-NOTES.md.
 """
 
+import os
+
+import psycopg
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+PLAYER_ENTITY_ID = 6  # matches pipeline.PLAYER_ENTITY_ID
+
 # Event ids duplicated from seed_db.py rather than imported — this module
 # should be able to reason about belief provenance without depending on
 # how the world happens to be seeded.
@@ -79,3 +88,102 @@ BELIEF_RULES = [
         threshold=0.35,
     ),
 ]
+
+
+def evaluate_rule(rule, knowledge_rows):
+    """
+    knowledge_rows: iterable of (event_id, confidence) — everything one NPC
+    knows via npc_knowledge, regardless of channel (channel is already
+    baked into each row's confidence value).
+
+    Returns (forms, confidence). forms is False (confidence None) when
+    summed support doesn't clear the rule's threshold.
+    """
+    support_sum = sum(c for eid, c in knowledge_rows if eid in rule.supporting_events)
+    if support_sum < rule.threshold:
+        return False, None
+    return True, min(1.0, support_sum)
+
+
+def get_npc_knowledge_rows(conn, npc_id):
+    """(event_id, confidence) pairs for every event this NPC knows about."""
+    rows = conn.execute(
+        "SELECT event_id, confidence FROM npc_knowledge WHERE npc_id = %s",
+        (npc_id,),
+    ).fetchall()
+    return [(r[0], r[1]) for r in rows]
+
+
+def form_beliefs_for_npc(conn, npc_id, current_tick, knowledge_rows=None):
+    """
+    Evaluate every rule for one NPC and upsert npc_beliefs accordingly.
+    Idempotent via ON CONFLICT (npc_id, belief_text) — re-running recomputes
+    from this NPC's current full npc_knowledge rather than applying a delta,
+    so a belief that no longer clears threshold (shouldn't happen with
+    append-only knowledge, but keeps this a true "current state" pass) is
+    deleted rather than left stale.
+
+    knowledge_rows lets a caller supply an already-fetched/filtered view
+    instead of hitting the DB — used by demo_beliefs.py to simulate "before
+    this NPC learned event X" without touching real data.
+
+    Returns a list of (rule.key, forms, confidence).
+    """
+    if knowledge_rows is None:
+        knowledge_rows = get_npc_knowledge_rows(conn, npc_id)
+
+    results = []
+    for rule in BELIEF_RULES:
+        forms, confidence = evaluate_rule(rule, knowledge_rows)
+        if forms:
+            conn.execute("""
+                INSERT INTO npc_beliefs (npc_id, belief_text, confidence, formed_at)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (npc_id, belief_text) DO UPDATE SET
+                    confidence = EXCLUDED.confidence,
+                    formed_at = EXCLUDED.formed_at
+            """, (npc_id, rule.belief_text, confidence, current_tick))
+        else:
+            conn.execute(
+                "DELETE FROM npc_beliefs WHERE npc_id = %s AND belief_text = %s",
+                (npc_id, rule.belief_text),
+            )
+        results.append((rule.key, forms, confidence))
+    return results
+
+
+def form_all_beliefs(conn, current_tick):
+    """Run the formation pass for every alive NPC except the player."""
+    npc_ids = [r[0] for r in conn.execute(
+        "SELECT id FROM entities WHERE type = 'npc' AND status = 'alive' AND id != %s",
+        (PLAYER_ENTITY_ID,),
+    ).fetchall()]
+
+    all_results = {}
+    for npc_id in npc_ids:
+        all_results[npc_id] = form_beliefs_for_npc(conn, npc_id, current_tick)
+    conn.commit()
+    return all_results
+
+
+if __name__ == "__main__":
+    conn = psycopg.connect(os.environ["DATABASE_URL"])
+
+    current_tick = conn.execute('SELECT MAX("when") FROM events').fetchone()[0] or 0
+    results = form_all_beliefs(conn, current_tick)
+
+    names = dict(conn.execute("SELECT id, name FROM entities").fetchall())
+
+    print(f"Formation pass at tick {current_tick}\n")
+    for npc_id, rule_results in results.items():
+        print(f"{names[npc_id]} (id={npc_id}):")
+        formed_any = False
+        for key, forms, confidence in rule_results:
+            if forms:
+                formed_any = True
+                print(f"  [{key}] confidence={confidence:.2f}")
+        if not formed_any:
+            print("  (no beliefs cleared threshold)")
+        print()
+
+    conn.close()
