@@ -215,3 +215,34 @@ over time instead of all at once, the formation pass (already a full
 recompute from current knowledge, not a delta) will show real
 before/after without needing a demo script to fake it.
 
+## Phase 4: Direct Connection Is IPv6-Only, and That Breaks in Docker
+
+Containerizing surfaced something the host environment never would:
+`db.ttabdjmrginsgtagroor.supabase.co` (the "direct connection" host
+DATABASE_URL had pointed at since Phase 1) resolves to an IPv6 address
+only — no A record at all. My host machine has IPv6 egress, so every
+script ran fine against it for three phases. Docker Desktop's default
+bridge network doesn't route IPv6 out, so the containerized server hit
+`Network is unreachable` on its very first query — a failure mode with
+zero connection to anything I'd changed in that phase.
+
+Switched DATABASE_URL to Supabase's transaction pooler
+(`aws-1-eu-west-1.pooler.supabase.com:6543`, user
+`postgres.ttabdjmrginsgtagroor`) — IPv4, and also the connection type
+Supabase actually recommends for anything that isn't a long-running
+server with a stable outbound path, which a container fleet isn't.
+
+That raised a second question I didn't want to leave unchecked: PgBouncer
+in transaction-pooling mode is known to break psycopg's server-side
+prepared statements, since a pooled connection can be handed a
+different backend process between transactions while the client still
+thinks a statement is prepared on the old one. Tested both realistic
+shapes this codebase actually uses — the same query repeated many times
+within one open transaction (matches a single request's pipeline run),
+and the same query repeated across multiple explicit commits on one
+connection object (matches backfill_embeddings.py and beliefs.py's
+loops) — and both held up with no errors. Not exhaustive, but enough
+to ship without adding `prepare_threshold=None` everywhere pre-emptively.
+Worth re-checking if a future change introduces a genuinely long-lived,
+high-repeat connection (an app-level connection pool, say).
+
