@@ -47,6 +47,9 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 PLAYER_ENTITY_ID = 6  # matches pipeline.PLAYER_ENTITY_ID
 
+CONTRADICTION_FLOOR  = 0.15  # a counter-example makes an NPC uncertain, not converted
+CONTRADICTION_FACTOR = 0.5   # confidence is halved, not zeroed, when contradicted
+
 # Event ids duplicated from seed_db.py rather than imported — this module
 # should be able to reason about belief provenance without depending on
 # how the world happens to be seeded.
@@ -56,11 +59,13 @@ EVT_MANIFEST_BURNED = 3
 
 
 class BeliefRule:
-    def __init__(self, key, belief_text, supporting_events, threshold):
+    def __init__(self, key, belief_text, supporting_events, threshold,
+                 contradicting_events=frozenset()):
         self.key = key
         self.belief_text = belief_text
         self.supporting_events = frozenset(supporting_events)
         self.threshold = threshold
+        self.contradicting_events = frozenset(contradicting_events)
 
 
 BELIEF_RULES = [
@@ -86,6 +91,7 @@ BELIEF_RULES = [
         belief_text="The player is embedded with the Syndicate, not against it.",
         supporting_events={EVT_CURFEW_BRIBE},
         threshold=0.35,
+        contradicting_events={EVT_MANIFEST_BURNED},
     ),
 ]
 
@@ -96,13 +102,33 @@ def evaluate_rule(rule, knowledge_rows):
     knows via npc_knowledge, regardless of channel (channel is already
     baked into each row's confidence value).
 
-    Returns (forms, confidence). forms is False (confidence None) when
-    summed support doesn't clear the rule's threshold.
+    Returns (forms, confidence, contradicting_event_id). forms is False
+    (confidence/contradicting_event_id both None) when summed support
+    doesn't clear the rule's threshold — nothing to contradict if the
+    belief never formed in the first place.
+
+    Contradiction only looks at events THIS NPC's own knowledge_rows
+    contain: an NPC whose knowledge never includes the contradicting
+    event keeps their wrong belief at full confidence, because as far as
+    their own evidence goes, nothing corrects it.
     """
+    knowledge_rows = list(knowledge_rows)
+
     support_sum = sum(c for eid, c in knowledge_rows if eid in rule.supporting_events)
     if support_sum < rule.threshold:
-        return False, None
-    return True, min(1.0, support_sum)
+        return False, None, None
+
+    base_confidence = min(1.0, support_sum)
+
+    contradicting = [(eid, c) for eid, c in knowledge_rows if eid in rule.contradicting_events]
+    if contradicting:
+        confidence = max(CONTRADICTION_FLOOR, base_confidence * CONTRADICTION_FACTOR)
+        contradicting_event_id = contradicting[0][0]
+    else:
+        confidence = base_confidence
+        contradicting_event_id = None
+
+    return True, confidence, contradicting_event_id
 
 
 def get_npc_knowledge_rows(conn, npc_id):
@@ -127,28 +153,29 @@ def form_beliefs_for_npc(conn, npc_id, current_tick, knowledge_rows=None):
     instead of hitting the DB — used by demo_beliefs.py to simulate "before
     this NPC learned event X" without touching real data.
 
-    Returns a list of (rule.key, forms, confidence).
+    Returns a list of (rule.key, forms, confidence, contradicting_event_id).
     """
     if knowledge_rows is None:
         knowledge_rows = get_npc_knowledge_rows(conn, npc_id)
 
     results = []
     for rule in BELIEF_RULES:
-        forms, confidence = evaluate_rule(rule, knowledge_rows)
+        forms, confidence, contradicting_event_id = evaluate_rule(rule, knowledge_rows)
         if forms:
             conn.execute("""
-                INSERT INTO npc_beliefs (npc_id, belief_text, confidence, formed_at)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO npc_beliefs (npc_id, belief_text, confidence, contradicting_event_id, formed_at)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (npc_id, belief_text) DO UPDATE SET
                     confidence = EXCLUDED.confidence,
+                    contradicting_event_id = EXCLUDED.contradicting_event_id,
                     formed_at = EXCLUDED.formed_at
-            """, (npc_id, rule.belief_text, confidence, current_tick))
+            """, (npc_id, rule.belief_text, confidence, contradicting_event_id, current_tick))
         else:
             conn.execute(
                 "DELETE FROM npc_beliefs WHERE npc_id = %s AND belief_text = %s",
                 (npc_id, rule.belief_text),
             )
-        results.append((rule.key, forms, confidence))
+        results.append((rule.key, forms, confidence, contradicting_event_id))
     return results
 
 
@@ -178,10 +205,11 @@ if __name__ == "__main__":
     for npc_id, rule_results in results.items():
         print(f"{names[npc_id]} (id={npc_id}):")
         formed_any = False
-        for key, forms, confidence in rule_results:
+        for key, forms, confidence, contradicting_event_id in rule_results:
             if forms:
                 formed_any = True
-                print(f"  [{key}] confidence={confidence:.2f}")
+                note = f", contradicted by event {contradicting_event_id}" if contradicting_event_id else ""
+                print(f"  [{key}] confidence={confidence:.2f}{note}")
         if not formed_any:
             print("  (no beliefs cleared threshold)")
         print()
