@@ -442,15 +442,15 @@ def print_result(label, result):
     print(f"{'─' * 56}")
     print(f"  Checks run : {', '.join(result['checks_run'])}")
     if result["failures"]:
-        print(f"  Failures:")
+        print("  Failures:")
         for f in result["failures"]:
             print(f"    [{f['check']}] {f['reason']}")
     if result["warnings"]:
-        print(f"  Warnings:")
+        print("  Warnings:")
         for w in result["warnings"]:
             print(f"    [{w['check']}] {w['reason']}")
     if result["passed"] and not result["warnings"]:
-        print(f"  All checks passed.")
+        print("  All checks passed.")
 
 
 if __name__ == "__main__":

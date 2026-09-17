@@ -33,6 +33,6 @@ Keep it grounded and specific. This quest should only make sense for a player wh
 
     print(f"=== STATE {i} / {len(states)}: {game_state['last_player_action']} ===\n")
     print(message.content[0].text)
-    print(f"\n=== STATS ===")
+    print("\n=== STATS ===")
     print(f"Tokens used: {message.usage.input_tokens} in / {message.usage.output_tokens} out")
     print()

@@ -1,0 +1,7 @@
+# Minimal, high-signal ruleset: real bugs (undefined names, unused imports,
+# syntax errors), not style. Ruff's broader default catches things like
+# intentional multi-line string concatenation in prompt text and the
+# deliberate blind `except Exception` in server.py's request handlers —
+# neither is a bug here, so this repo doesn't lint against them.
+[lint]
+select = ["E9", "F"]

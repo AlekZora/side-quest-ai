@@ -73,7 +73,7 @@ def main():
     print(f"  forms={forms}  confidence={confidence}  contradicting_event_id={contradicting}")
 
     forms, confidence, contradicting = bel.evaluate_rule(rule, all_knowledge)
-    print(f"\nAFTER — Otto's real, full current knowledge:")
+    print("\nAFTER — Otto's real, full current knowledge:")
     print(f"  forms={forms}  confidence={confidence}  contradicting_event_id={contradicting}")
 
     conn.close()

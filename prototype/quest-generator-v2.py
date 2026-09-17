@@ -57,11 +57,11 @@ message = client.messages.create(
     ]
 )
 
-print(f"=== V2: COMBINED GAME STATE + NPC SCHEMA ===")
+print("=== V2: COMBINED GAME STATE + NPC SCHEMA ===")
 print(f"Player action : {game_state['player_action']}")
 print(f"NPC           : {npc['name']}")
 print()
 print(message.content[0].text)
 print()
-print(f"=== STATS ===")
+print("=== STATS ===")
 print(f"Tokens: {message.usage.input_tokens} in / {message.usage.output_tokens} out")

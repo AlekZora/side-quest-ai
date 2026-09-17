@@ -13,7 +13,6 @@ Flow:
 
 import json
 import os
-import re
 import sys
 
 import anthropic
@@ -582,7 +581,7 @@ def main():
 
     print()
     print("─" * 62)
-    print(f"  SUMMARY")
+    print("  SUMMARY")
     print("─" * 62)
     print(f"  Quest written to DB (id={quest_id}, status='{db_status}')")
     print(f"  NPC:       {npc_name}  (id={npc_id})")

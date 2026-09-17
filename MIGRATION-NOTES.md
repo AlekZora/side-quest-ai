@@ -246,3 +246,33 @@ to ship without adding `prepare_threshold=None` everywhere pre-emptively.
 Worth re-checking if a future change introduces a genuinely long-lived,
 high-repeat connection (an app-level connection pool, say).
 
+## Phase 4: CI Needed a Real Lint Config, Not Just a Command
+
+The brief said requirements.txt was missing psycopg and python-dotenv;
+it wasn't — both were added in Phase 1. No action needed there, just
+noting the instruction was stale by the time it reached me.
+
+`ruff check .` with no config reported 31 findings on this codebase.
+I chose not to either (a) ship CI red from commit one, or (b) adopt
+whatever ruleset happened to produce zero findings. Instead I read
+every finding and split them:
+
+- 10 were real and trivial: 9 unnecessary f-string prefixes and one
+  actually-unused `import re` in quest_generator_v4.py (dead since an
+  earlier phase's edits). Fixed with `ruff check --fix` and re-ran the
+  validator test suite and the prompt-builder check afterward —
+  behavior identical, as expected for changes this mechanical.
+- 21 were findings I'm not going to "fix": implicit multi-line string
+  concatenation in prompt text (intentional — that's just how a long
+  prompt string is written), and a blind `except Exception` in
+  server.py's request handlers (intentional — a FastAPI bridge server
+  should return a JSON error, not crash the process, on an unexpected
+  exception).
+
+Pinned the resulting selection (`E9`, `F` — syntax errors and Pyflakes:
+undefined names, unused imports, etc.) in `ruff.toml` rather than only
+in the CI command, so `ruff check .` behaves the same locally as in
+CI. The alternative — hand-picking `--select` flags only inside
+ci.yml — would silently diverge from local runs the moment anyone
+tweaks one without the other.
+

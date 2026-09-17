@@ -484,6 +484,6 @@ for template_type in TEMPLATES:
     print(f"\n── tokens: {in_tok} in / {out_tok} out ──")
 
 print(f"\n{'=' * 62}")
-print(f"  ALL FOUR TEMPLATES COMPLETE")
+print("  ALL FOUR TEMPLATES COMPLETE")
 print(f"  Total tokens: {total_in} in / {total_out} out")
 print(f"{'=' * 62}")
