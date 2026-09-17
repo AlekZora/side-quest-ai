@@ -75,6 +75,36 @@ def get_referenced_choice_event_id(conn, npc_id):
 
 # ── DB write ──────────────────────────────────────────────────────────────────
 
+# Outcome -> relationship-strength delta. Asymmetric on purpose: a validated
+# quest is a coherent, successful approach (trust built); a failed_validation
+# is a generation defect, not something the player did — a smaller, softer
+# cost, since it's the NPC's read on the player wobbling, not the player
+# betraying them. Other statuses (offered/accepted/completed/declined) have
+# no code path that writes them yet, so they're not handled here.
+RELATIONSHIP_DELTA_BY_STATUS = {
+    "validated":         0.1,
+    "failed_validation": -0.05,
+}
+
+
+def update_relationship_from_outcome(conn, npc_id, status, current_tick):
+    """
+    Nudge the npc_id -> player relationship's strength based on this quest's
+    outcome, capped to [-1.0, 1.0]. Only adjusts a relationship row that
+    already exists (from_id=npc_id, to_id=player, strength not null) —
+    does not create one.
+    """
+    delta = RELATIONSHIP_DELTA_BY_STATUS.get(status)
+    if delta is None:
+        return
+    conn.execute("""
+        UPDATE relationships
+        SET strength = GREATEST(-1.0, LEAST(1.0, strength + %s)),
+            last_changed_at = %s
+        WHERE from_id = %s AND to_id = %s AND strength IS NOT NULL
+    """, (delta, current_tick, npc_id, pipe.PLAYER_ENTITY_ID))
+
+
 def write_quest(conn, npc_id, template_type, status, quest_text,
                 referenced_event_id, current_tick, validation_log):
     cursor = conn.execute("""
@@ -91,6 +121,7 @@ def write_quest(conn, npc_id, template_type, status, quest_text,
             "UPDATE player_choices SET callback_used = 1 WHERE event_id = %s",
             (referenced_event_id,)
         )
+    update_relationship_from_outcome(conn, npc_id, status, current_tick)
     conn.commit()
     return quest_id
 
