@@ -4,7 +4,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 
-with open(SCRIPT_DIR / "../test-npcs.json") as f:
+with open(SCRIPT_DIR / "../docs/test-npcs.json") as f:
     npc_index = {npc["name"]: npc for npc in json.load(f)}
 
 # Combined test: game state + NPC definition
