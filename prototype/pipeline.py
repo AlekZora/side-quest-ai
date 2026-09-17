@@ -382,6 +382,30 @@ def get_referenced_choice(conn, npc_id, current_tick):
     }
 
 
+def build_npc_beliefs_text(conn, npc_id):
+    """
+    Build the npc_beliefs string for the game state — this NPC's current
+    conclusions about the player, as formed by beliefs.py's rule-based
+    pass. A belief with a contradicting_event_id is flagged as held with
+    some uncertainty; it isn't dropped, since the NPC still holds it.
+    """
+    rows = conn.execute("""
+        SELECT belief_text, confidence, contradicting_event_id
+        FROM npc_beliefs
+        WHERE npc_id = %s
+        ORDER BY confidence DESC
+    """, (npc_id,)).fetchall()
+
+    if not rows:
+        return "No settled beliefs about the player yet."
+
+    parts = []
+    for belief_text, confidence, contradicting_event_id in rows:
+        note = " (has since seen something that complicates this)" if contradicting_event_id else ""
+        parts.append(f"{belief_text} (confidence {confidence:.2f}){note}")
+    return " ".join(parts)
+
+
 def assemble_game_state(conn, npc, template, player_action, current_tick):
     props  = npc["properties"]
     npc_id = npc["id"]
@@ -392,6 +416,7 @@ def assemble_game_state(conn, npc, template, player_action, current_tick):
         "npc_name":      npc["name"],
         "npc_situation": props.get("situation", ""),
         "npc_knowledge": build_npc_knowledge_text(conn, npc_id, player_action),
+        "npc_beliefs":   build_npc_beliefs_text(conn, npc_id),
     }
 
     if template == "callback":

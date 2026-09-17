@@ -105,6 +105,7 @@ GAME STATE:
   Player's last action: {gs['player_action']}
   Current situation: {gs['npc_situation']}
   How {npc['name']} learned of the player's action: {gs['npc_knowledge']}
+  What {npc['name']} believes about the player: {gs['npc_beliefs']}
 
 NPC — {npc['name']}:
   Who they are: {npc['situation']}
@@ -148,6 +149,7 @@ GAME STATE:
   Player's last action: {gs['player_action']}
   Current situation: {gs['npc_situation']}
   How {npc['name']} learned of the player's action: {gs['npc_knowledge']}
+  What {npc['name']} believes about the player: {gs['npc_beliefs']}
 
 NPC — {npc['name']}:
   Who they are: {npc['situation']}
@@ -202,6 +204,7 @@ GAME STATE:
   Player's most recent action: {gs['player_action']}
   Current situation: {gs['npc_situation']}
   How {npc['name']} knows of the player's recent action: {gs['npc_knowledge']}
+  What {npc['name']} believes about the player: {gs['npc_beliefs']}
 
 PLAYER HISTORY (oldest first):
 {history_lines}
@@ -256,6 +259,7 @@ GAME STATE:
   Player's last action: {gs['player_action']}
   Current situation: {gs['npc_situation']}
   How {npc['name']} learned of the player's action: {gs['npc_knowledge']}
+  What {npc['name']} believes about the player: {gs['npc_beliefs']}
 
 NPC — {npc['name']}:
   Who they are: {npc['situation']}
