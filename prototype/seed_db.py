@@ -6,7 +6,11 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-DATABASE_URL = os.environ["DATABASE_URL"]
+# Seeding runs against the direct connection, same reasoning as init_db.py:
+# a provisioning step, not steady-state runtime traffic, and DDL-adjacent
+# enough (paired with init_db.py, explicit ids) that it shouldn't depend
+# on pooler behavior.
+MIGRATION_DATABASE_URL = os.environ["MIGRATION_DATABASE_URL"]
 
 # Entity IDs — explicit so relationships and FK refs are readable
 LOC_EASTERN_GATE        = 1
@@ -610,8 +614,8 @@ def print_counts(conn):
 
 
 def main():
-    print(f"Seeding {DATABASE_URL.split('@')[-1]}\n")
-    conn = psycopg.connect(DATABASE_URL)
+    print(f"Seeding {MIGRATION_DATABASE_URL.split('@')[-1]}\n")
+    conn = psycopg.connect(MIGRATION_DATABASE_URL)
 
     if already_seeded(conn):
         print("Database already seeded. Truncate the tables and re-run init_db.py to start fresh.")

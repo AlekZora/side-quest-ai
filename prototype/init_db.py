@@ -14,7 +14,11 @@ TABLE_NAMES = [
 
 
 def init_db():
-    conn = psycopg.connect(os.environ["DATABASE_URL"])
+    # Schema changes run against the direct connection, not the pooler:
+    # PgBouncer transaction-pooling mode can silently break server-side
+    # prepared statements (and is generally the wrong tool for DDL/admin
+    # work), so migrations get their own, unpooled connection string.
+    conn = psycopg.connect(os.environ["MIGRATION_DATABASE_URL"])
     with open(SCHEMA_PATH) as f:
         conn.execute(f.read())
     conn.commit()

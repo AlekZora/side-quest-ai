@@ -276,3 +276,67 @@ CI. The alternative — hand-picking `--select` flags only inside
 ci.yml — would silently diverge from local runs the moment anyone
 tweaks one without the other.
 
+## Phase 4 Follow-up: My "Checked Empirically" Note Was Wrong
+
+My mentor asked two things after Phase 4: whether init_db.py and
+seed_db.py still run clean against the pooler URL, and whether
+migrations and runtime should use separate connection strings — "which
+is what production setups usually do."
+
+Ran a real truncate-and-reseed cycle to check the first question
+properly rather than reason about it. init_db.py, seed_db.py, and
+backfill_embeddings.py all ran clean against the pooler. beliefs.py
+did not:
+
+    psycopg.errors.DuplicatePreparedStatement: prepared statement "_pg3_0" already exists
+
+This is the exact PgBouncer-transaction-mode-vs-prepared-statements
+failure mode I'd flagged as a residual risk after Phase 4's original
+pooler switch — and then under-tested. What I actually checked back
+then was "does the same query repeated many times on one connection
+object work" (yes). What I didn't check: PgBouncer transaction pooling
+can hand two *different* client connections the same recycled backend,
+and psycopg names its auto-prepared statements deterministically
+(`_pg3_0`, `_pg3_1`, ...) — so a fresh Connection object can collide
+with a statement name a completely different, earlier client session
+left on that backend. That only shows up when something exercises
+multiple query shapes across an uncommitted span, which is exactly
+what `beliefs.py`'s `form_all_beliefs()` does (multiple NPCs × multiple
+rules, one commit at the end) and my earlier smoke test didn't. Point
+taken: "I checked and it seemed fine" was true of the test, not the
+claim.
+
+Non-deterministic means the fact that init_db.py/seed_db.py/
+backfill_embeddings.py happened to pass this run is not evidence
+they're safe — they're exposed to the identical risk and could fail on
+a future run depending on what PgBouncer's pool state happens to be.
+
+Fixed both problems together, since the mentor's second suggestion
+turned out to remove the first one from half the codebase for free:
+
+- Added `MIGRATION_DATABASE_URL` (the direct, unpooled connection) to
+  `.env`. `init_db.py` and `seed_db.py` now use it — schema changes and
+  seed provisioning shouldn't depend on pooler behavior at all, and a
+  direct connection doesn't have this failure mode in the first place.
+- Every remaining `psycopg.connect(DATABASE_URL)` call (server.py,
+  pipeline.py, validator.py, quest_generator_v4.py, beliefs.py,
+  backfill_embeddings.py, demo_beliefs.py, compare_knowledge_retrieval.py)
+  now passes `prepare_threshold=None` — the documented fix for using
+  psycopg3 against a transaction-mode pooler: disable server-side
+  prepared statements entirely rather than hope the collision doesn't
+  recur.
+
+Re-verified end to end against Supabase: full truncate + init_db.py +
+seed_db.py (migration URL) + backfill_embeddings.py + beliefs.py
+(pooler URL, fixed) all clean; ran beliefs.py five times in a row with
+no recurrence; demo_beliefs.py reproduces the exact same belief state
+as before the fix; server.py's /health still returns
+`{"ok":true,"npc_count":7,"tick":50}`.
+
+**What I'd do differently**: when a fix works against a test I wrote
+myself, ask whether the test matches the failure mode's actual
+precondition — not just whether the fix seems plausible. "Repeated
+queries on one connection" and "different connections sharing a
+recycled backend" are different claims about PgBouncer, and I'd
+conflated them.
+

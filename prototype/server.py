@@ -34,7 +34,12 @@ app.add_middleware(
 
 
 def get_conn():
-    return psycopg.connect(DATABASE_URL)
+    # prepare_threshold=None: DATABASE_URL is a PgBouncer transaction-mode
+    # pooler connection, which can hand different client sessions the same
+    # backend and collide on psycopg's auto-named prepared statements —
+    # confirmed happening in practice (beliefs.py, DuplicatePreparedStatement)
+    # before this was added.
+    return psycopg.connect(DATABASE_URL, prepare_threshold=None)
 
 
 # ── Contract ──────────────────────────────────────────────────────────────

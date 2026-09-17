@@ -194,7 +194,11 @@ def form_all_beliefs(conn, current_tick):
 
 
 if __name__ == "__main__":
-    conn = psycopg.connect(os.environ["DATABASE_URL"])
+    # prepare_threshold=None: DATABASE_URL is a PgBouncer transaction-mode
+    # pooler connection, which can hand different client sessions the same
+    # backend and collide on psycopg's auto-named prepared statements —
+    # this is exactly what broke form_all_beliefs() before this was added.
+    conn = psycopg.connect(os.environ["DATABASE_URL"], prepare_threshold=None)
 
     current_tick = conn.execute('SELECT MAX("when") FROM events').fetchone()[0] or 0
     results = form_all_beliefs(conn, current_tick)

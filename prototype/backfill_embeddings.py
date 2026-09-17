@@ -50,7 +50,10 @@ def backfill(conn):
 
 
 def main():
-    conn = psycopg.connect(os.environ["DATABASE_URL"])
+    # prepare_threshold=None: DATABASE_URL is a PgBouncer transaction-mode
+    # pooler connection, which can hand different client sessions the same
+    # backend and collide on psycopg's auto-named prepared statements.
+    conn = psycopg.connect(os.environ["DATABASE_URL"], prepare_threshold=None)
     backfill(conn)
     conn.close()
 

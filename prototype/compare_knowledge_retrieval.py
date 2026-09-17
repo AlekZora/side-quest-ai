@@ -47,7 +47,10 @@ def main():
     trigger_action = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_TRIGGER
     npc_id = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_NPC_ID
 
-    conn = psycopg.connect(os.environ["DATABASE_URL"])
+    # prepare_threshold=None: DATABASE_URL is a PgBouncer transaction-mode
+    # pooler connection, which can hand different client sessions the same
+    # backend and collide on psycopg's auto-named prepared statements.
+    conn = psycopg.connect(os.environ["DATABASE_URL"], prepare_threshold=None)
     compare(conn, npc_id, trigger_action)
     conn.close()
 

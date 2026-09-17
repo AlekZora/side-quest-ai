@@ -504,7 +504,10 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
-    conn = psycopg.connect(os.environ["DATABASE_URL"])
+    # prepare_threshold=None: DATABASE_URL is a PgBouncer transaction-mode
+    # pooler connection, which can hand different client sessions the same
+    # backend and collide on psycopg's auto-named prepared statements.
+    conn = psycopg.connect(os.environ["DATABASE_URL"], prepare_threshold=None)
 
     player_location_id = get_player_location(conn)  # reads from player table
     trigger_action     = "Bribed the eastern gate guard to pass through after curfew"
