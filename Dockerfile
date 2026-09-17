@@ -1,11 +1,14 @@
+# Build context is the repo root (docker build . / docker compose up --build
+# from here) so this image can COPY only prototype/ — not docs/ or godot/,
+# neither of which the running service needs.
 FROM python:3.13-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY prototype/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY prototype/ .
 
 EXPOSE 8000
 

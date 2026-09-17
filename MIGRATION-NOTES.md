@@ -340,3 +340,42 @@ queries on one connection" and "different connections sharing a
 recycled backend" are different claims about PgBouncer, and I'd
 conflated them.
 
+## Repo Reorg: Docker Files Move to Root, Build Context Follows
+
+Moved Dockerfile, docker-compose.yml, and .dockerignore from
+prototype/ to the repo root, alongside moving 13 design docs into a
+new docs/ directory so root only holds what a visitor needs
+immediately (README, MIGRATION-NOTES, prototype/, godot/, .github/).
+
+Moving the Dockerfile changes what "the build context" means. With
+the Dockerfile inside prototype/, `.` was prototype/ itself — `COPY
+requirements.txt .` and `COPY . .` both resolved relative to that
+directory. With the Dockerfile at root, `.` is the whole repo, so both
+COPY lines needed the prototype/ prefix (`COPY prototype/requirements.txt
+.`, `COPY prototype/ .`) to keep copying the same files into the same
+place inside the image.
+
+This turned out to be an improvement, not just a relocation: with the
+Dockerfile at prototype/, `COPY . .` copied everything the .dockerignore
+didn't exclude — which was only ever prototype/'s own contents,
+because that was the whole build context. Now that the context is the
+repo root, `COPY prototype/ .` is explicit about copying only
+prototype/ — docs/ and godot/ were never going to be needed by a
+running FastAPI server, and now that's structural, not just true by
+the accident of where the Dockerfile happened to sit.
+
+docker-compose.yml's env_file path became `prototype/.env` (was
+`.env`) for the same reason — paths in a compose file resolve relative
+to the compose file's own location, which also moved.
+
+.github/workflows/ci.yml's Docker build step could no longer share the
+job-level `working-directory: prototype` default the lint/install
+steps use — it needs to run from the repo root now. Moved that default
+to per-step instead of job-level, so Install/Lint still run from
+prototype/ and Build Docker image runs from root.
+
+Verified: `docker compose up --build` from the repo root builds and
+starts cleanly, `/health` returns `{"ok":true,"npc_count":7,"tick":50}`,
+and `docker compose exec api ls /app` confirms the image contains only
+prototype/'s files — no docs/, no godot/.
+

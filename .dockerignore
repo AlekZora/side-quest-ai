@@ -1,0 +1,12 @@
+.git
+.github
+docs/
+godot/
+prototype/venv/
+**/__pycache__/
+*.py[cod]
+*.pyo
+prototype/.env
+.env.local
+.DS_Store
+prototype/blackwater.db
