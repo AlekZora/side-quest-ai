@@ -442,3 +442,74 @@ NPC's result on its own.
 Full before/after and the distance table are in the PR/commit
 description, not duplicated here.
 
+## Phase 6: The Retrieval Boundary Was Scoped; Prompt Assembly Wasn't
+
+**What broke and why.** Phase 5 scoped `npc_knowledge` retrieval correctly —
+confidence gate, similarity floor, permission join first. But
+`assemble_game_state()` also put the raw `player_action` trigger string
+straight into `game_state`, unfiltered by any of that, and every entry in
+`quest_generator_v4.PROMPT_BUILDERS` interpolated it directly into the
+prompt — twice, in three of the four templates (once in the `GAME STATE`
+header, once again inline in a numbered instruction telling the model to
+describe specific content from it). The scoping work in `npc_knowledge` was
+real; it just wasn't the only channel content reached the model through.
+`MAIN_QUEST` had the identical problem, one layer up — global constant,
+same string in every prompt regardless of NPC, with only a prompt-level
+request ("do not reference this") standing between it and the output.
+
+Wrote `test_knowledge_boundary.py` before touching anything: for each of
+the 4 seeded quest-giver NPCs, a trigger describing a real seeded event
+that NPC holds zero `npc_knowledge` rows for, run through the real
+`assemble_game_state()` + `PROMPT_BUILDERS` path, checked against a real
+model call for terms unique to the unlearned event. 4/4 failed. Sharpest
+case: Otto, given a trigger about an event he never learned about, wrote
+that he "directly observed" it. Committed the failing test on its own
+first, so the regression is in history before the fix that closes it.
+
+**What I chose between, and on what grounds.** For `player_action`, three
+options on the table: degrade it per-NPC by channel (full detail if
+witnessed, vaguer if told-by, bare if nothing), drop it and rely on
+`npc_knowledge` text alone, or split it into two fields. Went with the
+split: the field was doing two jobs at once — "something happened, this
+NPC has a reason to act now" (true for any NPC regardless of what they
+know) and "here is what happened" (only true for a scoped match) — and
+degrading or dropping both leaves one of those jobs either still leaking
+content or unfulfilled. `game_state.trigger_notice` is now a fixed,
+content-free string, identical for every NPC; every template still gets
+its "why approach now" hook, but all actual content comes exclusively from
+`npc_knowledge`. Three of the four templates had a second leak channel
+beyond the header — an inline instruction asking the model to describe
+"the capability the player demonstrated in `{player_action}}`" or similar —
+those got reworded to point at documented knowledge instead of the raw
+trigger; findings this before touching code, not after, is exactly what
+tracing every interpolation site in step 1 of the review was for.
+
+Verified both directions: the regression test now passes 4/4, and a
+spot-check on the positive path (Otto, given a trigger for the curfew
+bribe he actually witnessed) still produces a fully grounded escalation
+quest that uses his real knowledge and network — the fix removes the leak
+without flattening the case where an NPC legitimately knows something.
+
+`MAIN_QUEST` is not fixed yet. Tracing it surfaced that a blanket "reject
+output referencing main-quest specifics unless the NPC has a knowledge
+row" can't work as a single rule: `MAIN_QUEST` isn't tied to any `event_id`
+at all, so no NPC can ever hold a `npc_knowledge` row for it by
+construction — and the escalation template's entire purpose is producing a
+*new*, model-invented revelation that recontextualizes `MAIN_QUEST` from
+the NPC's `network`, which structurally cannot be pre-supported by an
+existing knowledge row either. The original design doc
+(`docs/fact-database-design.md`) already anticipated this as two separate,
+narrower checks — C8/HC11 ("quest must not *resolve* a main story beat,"
+keyword-blocklist heuristic) and world_texture's own explicit "zero
+main-quest content" rule — neither of which is "reject unless
+knowledge-row-traceable." Raised this back before implementing anything,
+rather than shipping a check that would fail every future escalation
+quest by design.
+
+**What I'd do differently.** Would have caught the `MAIN_QUEST` conflict
+one step earlier if I'd read `docs/fact-database-design.md`'s C6/C8
+definitions *before* proposing options in the report, rather than after
+getting a decision back — the design doc already had the answer to
+"why can't this be one rule" on file since the original design pass;
+re-deriving it in the moment cost a round trip.
+
