@@ -14,6 +14,17 @@ import openai
 
 MAIN_QUEST      = "Rescue Elena from the Syndicate"
 PLAYER_ENTITY_ID = 6
+
+# Fixed, content-free pacing cue for every prompt template. Separates the two
+# jobs the raw player_action string used to do at once: "something just
+# happened, this NPC has a reason to act now" (true for any NPC regardless of
+# what they know) versus "here is what happened" (only true for an NPC with a
+# scoped npc_knowledge match). This carries the first job only — the second
+# comes exclusively from build_npc_knowledge_text, which is already scoped.
+TRIGGER_NOTICE = (
+    "The player just did something that reached this NPC's attention — "
+    "that is why they are approaching now."
+)
 COOLDOWN_WINDOW  = 5    # recent quest rows to check for NPC cooldown
 EMBEDDING_MODEL  = "text-embedding-3-small"
 
@@ -417,16 +428,24 @@ def build_npc_beliefs_text(conn, npc_id):
 
 
 def assemble_game_state(conn, npc, template, player_action, current_tick):
+    """
+    player_action still flows in as an argument — build_npc_knowledge_text
+    needs the raw trigger text to embed and rank against this NPC's own known
+    events. What it does NOT do anymore is reach game_state directly: the
+    prompt-facing pacing cue (TRIGGER_NOTICE) carries no content, and all
+    actual content about what happened comes from npc_knowledge, which is
+    already scoped to what this specific NPC knows.
+    """
     props  = npc["properties"]
     npc_id = npc["id"]
 
     game_state = {
-        "main_quest":    MAIN_QUEST,
-        "player_action": player_action,
-        "npc_name":      npc["name"],
-        "npc_situation": props.get("situation", ""),
-        "npc_knowledge": build_npc_knowledge_text(conn, npc_id, player_action),
-        "npc_beliefs":   build_npc_beliefs_text(conn, npc_id),
+        "main_quest":     MAIN_QUEST,
+        "trigger_notice": TRIGGER_NOTICE,
+        "npc_name":       npc["name"],
+        "npc_situation":  props.get("situation", ""),
+        "npc_knowledge":  build_npc_knowledge_text(conn, npc_id, player_action),
+        "npc_beliefs":    build_npc_beliefs_text(conn, npc_id),
     }
 
     if template == "callback":

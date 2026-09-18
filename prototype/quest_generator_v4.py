@@ -132,7 +132,7 @@ def build_escalation_prompt(gs, npc):
 
 GAME STATE:
   Main quest: {gs['main_quest']}
-  Player's last action: {gs['player_action']}
+  Trigger: {gs['trigger_notice']}
   Current situation: {gs['npc_situation']}
   How {npc['name']} learned of the player's action: {gs['npc_knowledge']}
   What {npc['name']} believes about the player: {gs['npc_beliefs']}
@@ -148,12 +148,15 @@ The task is a means to a revelation — the reveal is the reward, not the errand
 
 Include exactly these five things:
 
-1. WHY {npc['name']} is approaching the player right now — connect the player's
-   action to {npc['name']}'s current situation. The player's action is what makes
-   {npc['name']} willing to risk this conversation. Be specific about the connection.
+1. WHY {npc['name']} is approaching the player right now — connect what
+   {npc['name']} actually knows (see above) to {npc['name']}'s current
+   situation. That knowledge is what makes {npc['name']} willing to risk
+   this conversation. Be specific about the connection.
 
-2. WHAT {npc['name']} needs from the player — a concrete task that uses the kind
-   of capability the player demonstrated in {gs['player_action']}.
+2. WHAT {npc['name']} needs from the player — a concrete task shaped by what
+   {npc['name']} actually knows about the player, per their documented
+   knowledge above. Do not invent capabilities {npc['name']} has no basis to
+   know about.
 
 3. WHAT it costs the player to help — time, resources, exposure, or moral weight.
    Must be real, not a token errand.
@@ -167,8 +170,9 @@ Include exactly these five things:
    {gs['main_quest']} is different after this reveal than before.
 
 Keep it grounded and specific. The revelation must be something only {npc['name']}
-could know through their specific network. This quest must not make sense for a
-player who did anything other than {gs['player_action']}."""
+could know through their specific network. This quest must not make sense for
+a player {npc['name']} had no reason to notice — it must follow specifically
+from what {npc['name']} actually knows (see above), not from a generic occasion."""
 
 
 def build_personal_crisis_prompt(gs, npc):
@@ -176,7 +180,7 @@ def build_personal_crisis_prompt(gs, npc):
 
 GAME STATE:
   Main quest: {gs['main_quest']}
-  Player's last action: {gs['player_action']}
+  Trigger: {gs['trigger_notice']}
   Current situation: {gs['npc_situation']}
   How {npc['name']} learned of the player's action: {gs['npc_knowledge']}
   What {npc['name']} believes about the player: {gs['npc_beliefs']}
@@ -193,11 +197,13 @@ The main quest is background context only — do not make it the emotional cente
 
 Include exactly these five things:
 
-1. WHY {npc['name']} is approaching the player specifically — the player's action
-   is what established the trust or created the specific need. {npc['name']} is not
-   approaching because the player is the hero. They are approaching because of
-   what {gs['player_action']} revealed about what kind of person the player is.
-   Name the quality the player demonstrated that made {npc['name']} choose them.
+1. WHY {npc['name']} is approaching the player specifically — what
+   {npc['name']} actually knows about the player (see above) is what
+   established the trust or created the specific need. {npc['name']} is not
+   approaching because the player is the hero. They are approaching because
+   of what their own documented knowledge revealed about what kind of person
+   the player is. Name the quality the player demonstrated, per that
+   knowledge, that made {npc['name']} choose them.
 
 2. WHAT the crisis is — derive it directly from {npc['stake']}. What is actively
    threatening what {npc['name']} stands to lose, and why is it happening now?
@@ -231,7 +237,7 @@ def build_callback_prompt(gs, npc):
 
 GAME STATE:
   Main quest: {gs['main_quest']}
-  Player's most recent action: {gs['player_action']}
+  Trigger: {gs['trigger_notice']}
   Current situation: {gs['npc_situation']}
   How {npc['name']} knows of the player's recent action: {gs['npc_knowledge']}
   What {npc['name']} believes about the player: {gs['npc_beliefs']}
@@ -286,7 +292,7 @@ def build_world_texture_prompt(gs, npc):
 
 GAME STATE:
   Main quest: {gs['main_quest']}
-  Player's last action: {gs['player_action']}
+  Trigger: {gs['trigger_notice']}
   Current situation: {gs['npc_situation']}
   How {npc['name']} learned of the player's action: {gs['npc_knowledge']}
   What {npc['name']} believes about the player: {gs['npc_beliefs']}
@@ -309,9 +315,10 @@ required connection. The quest is entirely about {npc['name']}'s life.
 Include exactly these five things:
 
 1. HOW the player's action reached {npc['name']} — through what specific channel,
-   and what {npc['name']} concluded from it. This should feel incidental, not
-   fated. The action is why {npc['name']} knows to approach this specific person.
-   It is not why the quest exists.
+   and what {npc['name']} concluded from it, per what {npc['name']} actually
+   knows (see above). This should feel incidental, not fated. That knowledge is
+   why {npc['name']} knows to approach this specific person. It is not why the
+   quest exists.
 
 2. WHAT {npc['name']}'s actual situation is — not a summary, but what it feels
    like from the inside. What {npc['name']} is dealing with right now, in concrete
@@ -319,8 +326,8 @@ Include exactly these five things:
    without any reference to the main story.
 
 3. WHAT {npc['name']} needs from the player — specific and shaped by their want.
-   Must connect to the kind of capability the player demonstrated in
-   {gs['player_action']}.
+   Must connect to what {npc['name']} actually knows about the player, per
+   their documented knowledge above.
 
 4. WHAT it costs the player to help — real cost, not a token errand.
 
