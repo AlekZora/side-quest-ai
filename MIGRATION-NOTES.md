@@ -379,3 +379,66 @@ starts cleanly, `/health` returns `{"ok":true,"npc_count":7,"tick":50}`,
 and `docker compose exec api ls /app` confirms the image contains only
 prototype/'s files — no docs/, no godot/.
 
+## Phase 5: Semantic Retrieval Shipped Without the Trust Gate It Needed
+
+**What broke and why.** Phase 2 added `build_npc_knowledge_text`'s
+semantic path (embedding similarity via `events.embedding <=> vector`)
+but carried over none of the trust discipline the five other queries in
+`pipeline.py` already apply (`get_eligible_templates`, `score_pair`'s
+callback freshness, `build_player_history`, `get_referenced_choice` all
+gate on `confidence >= 0.5`). The semantic query had no confidence gate
+and `LIMIT 1` with no distance threshold — Postgres always returns the
+nearest row regardless of how semantically distant it actually is. A
+low-confidence rumor about an unrelated event could become the one line
+an NPC's knowledge is built from, and nothing about the output signals
+that it's a stretch.
+
+**What I chose between, and on what grounds.** Before picking a
+threshold I ran real triggers against all four seeded quest-giver NPCs
+(Otto, Serge, Daria, Nadia) and printed actual cosine distances rather
+than guessing one. True on-topic top-1 matches clustered tightly at
+0.30–0.35. Every irrelevant case — an off-topic trigger, and a trigger
+about an event a given NPC never learned about at all — landed at
+0.61+, including three cross-NPC probes (Otto's real curfew-bribe
+trigger run against Serge/Daria/Nadia, who have no `npc_knowledge` row
+for that event) that all converged on the *same* wrong answer at
+dist=0.6114: a checkpoint-reconfiguration event that's topically
+adjacent but not what actually happened. That's the regression made
+concrete — before the fix, all three NPCs would answer a question about
+a bribe they never witnessed with a confident-sounding, wrong sentence.
+
+Given the clean gap (0.35 to 0.61, nothing observed in between),
+chose `KNOWLEDGE_SIMILARITY_FLOOR = 0.45` — margin on both sides of the
+gap rather than hugging either edge.
+
+For the no-match case, chose to drop the recency fallback rather than
+keep it gated behind the floor. Recency was the thing Phase 2 already
+argued against (an undifferentiated dump the model has to sort out,
+worse: presented with no signal that it might be irrelevant) — gating
+it behind a distance check doesn't fix that property, it just narrows
+when it fires. Return an explicit no-match message instead, and split
+it into two distinct states rather than one: "this NPC has trusted
+knowledge, just none relevant to this trigger" is a different fact from
+"this NPC has no trusted knowledge at all," and collapsing them would
+hide which one the generator is actually working with. Verified the
+second state is real, not just theoretical — Marta (id=11) has zero
+`npc_knowledge` rows in the seed data and correctly produces the
+no-knowledge-at-all message.
+
+Raised `LIMIT` from 1 to 3, now that the floor guarantees relevance —
+matches the shape of the fallback this replaces (also 3) and gives the
+generator more than a single sentence when more than one relevant,
+trusted memory exists (Otto's on-topic trigger clears the floor with
+two events, not one).
+
+**What I'd do differently.** The three cross-NPC probes converging on
+the identical wrong event at the identical distance (0.6114) was a
+useful accident, not something I designed for — I'd deliberately
+construct a case like that earlier next time, since a single wrong
+answer repeating across unrelated NPCs is a much sharper demonstration
+of "this is ranking against the wrong denominator" than any one
+NPC's result on its own.
+
+Full before/after and the distance table are in the PR/commit
+description, not duplicated here.
+

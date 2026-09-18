@@ -17,6 +17,14 @@ PLAYER_ENTITY_ID = 6
 COOLDOWN_WINDOW  = 5    # recent quest rows to check for NPC cooldown
 EMBEDDING_MODEL  = "text-embedding-3-small"
 
+# Cosine-distance floor for build_npc_knowledge_text's semantic match.
+# Chosen from real numbers, not a guess: on a sample of on-topic triggers
+# against their correct seeded event, top-1 distance was 0.30-0.35; every
+# irrelevant case sampled (off-topic triggers, and triggers about events a
+# given NPC never learned about at all) landed at 0.61+. 0.45 sits in the
+# gap with margin on both sides. Re-derive if the corpus changes shape.
+KNOWLEDGE_SIMILARITY_FLOOR = 0.45
+
 _openai_client = None
 
 
@@ -273,47 +281,49 @@ def build_npc_knowledge_text_keyword(conn, npc_id, trigger_action):
 
 def build_npc_knowledge_text(conn, npc_id, trigger_action):
     """
-    Build the npc_knowledge string for the game state.
-    Prioritises knowledge of the triggering event, matched by embedding
-    similarity (cosine distance) against events.embedding; falls back to
-    most recent knowledge when the NPC has no embedded events to rank
-    (embedding column NULL — backfill not run, or the event predates it).
+    Build the npc_knowledge string for the game state. Three layers, each
+    doing one job: the npc_knowledge join is what's PERMITTED (this NPC's
+    known events only — never ranks across events it doesn't know about);
+    the KNOWLEDGE_SIMILARITY_FLOOR cosine-distance cutoff is what's
+    RELEVANT to the trigger; confidence >= 0.5 is what's TRUSTED among the
+    relevant, consistent with every other confidence gate in this file.
 
-    Filters by the npc_knowledge join first (this NPC's known events only),
-    then ranks the result by similarity — never ranks across events the NPC
-    doesn't actually know about.
+    No recency fallback: a distant, low-relevance memory should not stand
+    in for a trigger-relevant one just because it's recent. When nothing
+    clears both gates, distinguishes two states rather than collapsing
+    them into one message — "has knowledge, none of it relevant here" is a
+    different fact than "has no trusted knowledge at all", and the
+    generator should be told which one is true.
     """
     trigger_embedding = _vector_literal(embed_text(trigger_action))
 
-    # Try to find the known event closest in meaning to the trigger
+    # Known events (npc_knowledge join), trusted (confidence >= 0.5),
+    # relevant (within the similarity floor), closest first.
     trigger_rows = conn.execute("""
         SELECT e.what, k.channel, k.confidence
         FROM npc_knowledge k
         JOIN events e ON e.id = k.event_id
         WHERE k.npc_id = %s
+          AND k.confidence >= 0.5
           AND e.embedding IS NOT NULL
+          AND e.embedding <=> %s::vector <= %s
         ORDER BY e.embedding <=> %s::vector
-        LIMIT 1
-    """, (npc_id, trigger_embedding)).fetchall()
-
-    # Fall back to three most recent knowledge rows
-    recent_rows = conn.execute("""
-        SELECT e.what, k.channel, k.confidence
-        FROM npc_knowledge k
-        JOIN events e ON e.id = k.event_id
-        WHERE k.npc_id = %s
-        ORDER BY e."when" DESC
         LIMIT 3
-    """, (npc_id,)).fetchall()
+    """, (npc_id, trigger_embedding, KNOWLEDGE_SIMILARITY_FLOOR, trigger_embedding)).fetchall()
 
-    rows = trigger_rows if trigger_rows else recent_rows
-    if not rows:
-        return "No documented knowledge of recent events."
+    if trigger_rows:
+        parts = []
+        for what, channel, conf in trigger_rows:
+            parts.append(f"Learned via {channel} (confidence {conf:.1f}): {what}.")
+        return " ".join(parts)
 
-    parts = []
-    for what, channel, conf in rows:
-        parts.append(f"Learned via {channel} (confidence {conf:.1f}): {what}.")
-    return " ".join(parts)
+    has_trusted_knowledge = conn.execute("""
+        SELECT COUNT(*) FROM npc_knowledge WHERE npc_id = %s AND confidence >= 0.5
+    """, (npc_id,)).fetchone()[0]
+
+    if has_trusted_knowledge:
+        return "This NPC has documented knowledge of other events, but none of it relevant to what just happened."
+    return "No documented knowledge of any events at this NPC's trust threshold."
 
 
 def build_player_history(conn, npc_id, current_tick):
