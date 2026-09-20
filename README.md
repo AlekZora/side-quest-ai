@@ -125,7 +125,8 @@ the target, not current behaviour.
 - FastAPI — HTTP server
 - Docker + docker-compose — containerized service
 - GitHub Actions — CI (lint + image build on every push)
-- Godot 4.x — game engine (in progress)
+- Godot 4.7.1 — game client (working as of Aug 2026; not re-tested since
+  the Postgres migration)
 
 ## What Works Today / What's Next
 
@@ -134,9 +135,10 @@ the target, not current behaviour.
 - Full HTTP round trip: `GET /health`, `POST /generate-quest` — a quest
   that passes every hard constraint (C1 structure, C3 existence, C4
   state, C5 causation) and is written to Postgres as `validated`
-- The Godot client makes the full call end to end: the player walks
-  into an NPC's talk zone, presses E, and a generated, validated quest
-  renders on screen
+- The Godot client made the full call end to end — the player walks into
+  an NPC's talk zone, presses E, and a generated, validated quest renders
+  on screen. **Verified end to end before the Postgres migration
+  (Aug 2026); not re-tested since.**
 - Semantic retrieval of NPC knowledge (embeddings + cosine similarity,
   scoped to what the NPC actually knows)
 - Rule-based belief formation with contradiction handling, fed into
@@ -146,6 +148,22 @@ the target, not current behaviour.
 - Containerized (`docker compose up --build`) with CI running lint and
   an image build on every push
 
+The round trip from that Aug 2026 run, for the record. The chain was
+Godot 4.7.1 → HTTP → Python → SQLite → Claude → validator → back to the
+engine canvas, and it returned a quest that passed every hard constraint
+on the first attempt:
+
+```
+[bridge] POST http://localhost:8000/generate-quest
+[bridge] HTTP status code: 200
+[bridge] npc=Otto template=personal_crisis validation=passed attempts=1
+[bridge]   attempt 1: failed=none retried=false — passed on attempt 1
+```
+
+The DB link in that chain is Postgres now. That substitution is the
+reason the client claim above is dated rather than current — it is the
+one hop in the chain that has not been re-exercised since.
+
 **What's next**
 
 - Q6 experiment protocol — can players distinguish generated from
@@ -154,17 +172,6 @@ the target, not current behaviour.
 - A trained NER model to replace C3's regex-based entity extraction
 - 8+ additional NPCs
 - The two-history Blackwater demo comparison below — not yet built
-
-In Godot 4.7.1, the chain is Godot → HTTP → Python → Postgres → Claude →
-validator → back to the engine canvas. The verified round trip returned
-a quest that passed every hard constraint on the first attempt:
-
-```
-[bridge] POST http://localhost:8000/generate-quest
-[bridge] HTTP status code: 200
-[bridge] npc=Otto template=personal_crisis validation=passed attempts=1
-[bridge]   attempt 1: failed=none retried=false — passed on attempt 1
-```
 
 ## Repository Structure
 
