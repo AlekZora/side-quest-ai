@@ -166,12 +166,37 @@ one hop in the chain that has not been re-exercised since.
 
 **What's next**
 
-- Q6 experiment protocol — can players distinguish generated from
-  handcrafted quests? (Step 8, the currently active step)
-- R1–R4 recovery cascade for failed validations
-- A trained NER model to replace C3's regex-based entity extraction
-- 8+ additional NPCs
-- The two-history Blackwater demo comparison below — not yet built
+- **Close the `MAIN_QUEST` knowledge-boundary leak.** The `player_action`
+  half is fixed and regression-tested; `MAIN_QUEST` is still a global
+  constant interpolated into every prompt with only a "do not reference
+  this" instruction guarding it. It can't be closed by the same rule —
+  `MAIN_QUEST` is tied to no `event_id`, so no NPC can hold a knowledge
+  row for it by construction, and the escalation template exists
+  precisely to invent a revelation about it. Needs the two narrower
+  checks the original design already specified: C8/HC11 ("must not
+  *resolve* a main story beat") and world_texture's zero-main-quest
+  rule. See `MIGRATION-NOTES.md`.
+- **Re-run the Godot client against Postgres.** The only hop in the
+  chain still unverified after the migration.
+- **Design the Q6 experiment** — can players distinguish generated from
+  handcrafted quests? Needs handcrafted quests written for one scenario,
+  generated ones from the same scenario, interleaved, with the questions
+  and the success criterion defined up front.
+- **Decide which quest corpus Q6 uses.** Two historical SQLite
+  `blackwater.db` files exist and disagree (13 quests / 6 validated in
+  the archived copy, 8 in the repo copy). Neither backs the running app
+  any more, so this is now only a question about the experiment's
+  sample — but it should be chosen deliberately rather than inherited.
+- **Failure-specific retry strategies.** The current retry policy does
+  not distinguish a generation truncated by `max_tokens` from a genuine
+  semantic validation failure, so it retries both identically.
+- **Replace C3's entity extraction.** The stopword heuristic produces
+  false positives on sentence-opening capitalised words ("Except",
+  "Whether") and will get brittler as generated language varies; a
+  trained NER model is the intended replacement.
+- **8+ additional NPCs.**
+- **The two-history Blackwater demo comparison** described above — still
+  the target, not current behaviour.
 
 ## Repository Structure
 
