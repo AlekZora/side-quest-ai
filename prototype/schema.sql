@@ -131,3 +131,33 @@ CREATE TABLE IF NOT EXISTS quests (
     created_at          INTEGER NOT NULL,
     validation_log      TEXT
 );
+
+-- Row Level Security — deliberately enabled with NO policies.
+--
+-- Supabase grants anon and authenticated full DML on every table in `public`
+-- by default, and PostgREST auto-exposes them, so without RLS anyone holding
+-- the project URL and the anon key could read, edit or delete the whole world
+-- state. RLS with zero policies denies those roles everything: no policy means
+-- no row is ever visible or writable.
+--
+-- This does not affect the app. Both DATABASE_URL and MIGRATION_DATABASE_URL
+-- connect as the `postgres` role, which has rolbypassrls = true, so psycopg
+-- reads and writes are unaffected. The app has never used the REST API.
+--
+-- Idempotent: re-enabling on an already-enabled table is a no-op, so this runs
+-- cleanly on every init_db.py invocation. If a policy is ever needed, add it
+-- here — an empty policy set is what makes this a closed door rather than an
+-- open one.
+--
+-- Caveat: RLS governs SELECT/INSERT/UPDATE/DELETE, NOT TRUNCATE. The TRUNCATE
+-- grant held by anon/authenticated is unreachable through PostgREST (which
+-- exposes no TRUNCATE verb), but see MIGRATION-NOTES.md for why revoking the
+-- grants outright is the stronger follow-up.
+ALTER TABLE entities       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE relationships  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_choices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE npc_knowledge  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE npc_beliefs    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quests         ENABLE ROW LEVEL SECURITY;
