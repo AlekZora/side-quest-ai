@@ -513,3 +513,64 @@ getting a decision back — the design doc already had the answer to
 "why can't this be one rule" on file since the original design pass;
 re-deriving it in the moment cost a round trip.
 
+## Phase 7: RLS Was Off, and Supabase's Default Grants Made That Load-Bearing
+
+**What was broken.** Supabase flagged RLS as disabled on all 8 tables in
+`public`. The severity comes from the grants, not the RLS flag by itself:
+Supabase's defaults hand `anon` and `authenticated` *full* DML on every
+table in `public` — `SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES,
+TRIGGER` — and PostgREST auto-exposes them. Verified before touching
+anything: all 16 grant rows present, RLS off on all 8, zero policies. So
+anyone holding the project URL and the anon key (a key that ships in
+client code by design) could read, rewrite or delete the entire world
+state.
+
+**The check that had to come first.** The whole fix rests on the app not
+caring, so that got verified before the change, not after: both
+`DATABASE_URL` and `MIGRATION_DATABASE_URL` connect as `postgres`, and
+`pg_roles` reports `rolbypassrls = true` for it (`rolsuper` is false —
+Supabase's `postgres` is not a superuser, so BYPASSRLS is the attribute
+doing the work, and it is the one that matters here). Had that come back
+false, enabling RLS with no policies would have locked the app out of its
+own database.
+
+**What I chose, and on what grounds.** RLS enabled on all 8 tables with
+**no policies at all**. An empty policy set is not an oversight — under
+RLS, no matching policy means no row is visible or writable, so zero
+policies is the maximally closed state. Put in `schema.sql` after the
+`CREATE TABLE`s rather than applied as a one-off, so `init_db.py` re-asserts
+it on every run; `ENABLE ROW LEVEL SECURITY` is idempotent, so the re-run
+is a clean no-op (confirmed by running `init_db.py` twice).
+
+**Verification.** `pg_tables.rowsecurity` true on 8/8, policy count 0.
+Then empirically, via `SET LOCAL ROLE anon` inside a rolled-back
+transaction: `SELECT` on `entities`/`quests`/`player` returns 0 rows where
+`postgres` sees 13 entities; `UPDATE` and `DELETE` affect 0 rows; `INSERT`
+is hard-rejected with `InsufficientPrivilege`. App side unaffected —
+`pipeline.py` runs the full read path through the pooler and selects
+Otto/`world_texture`, `/health` returns `{ok: true, npc_count: 7, tick: 50}`,
+matching the pre-change baseline exactly.
+
+**The gap this does not close — TRUNCATE.** RLS governs
+`SELECT/INSERT/UPDATE/DELETE/MERGE`. It does **not** govern `TRUNCATE`,
+which is controlled solely by the grant, and `anon` still holds
+`TRUNCATE` on all 8 tables (`has_table_privilege` confirms it post-change).
+This is not reachable today — PostgREST exposes no TRUNCATE verb, and
+`anon` cannot open a direct Postgres connection — so it is a latent hole,
+not an open one. But it means "RLS blocks REST access entirely" is true of
+the flagged issue and not of the grants underneath it. The stronger fix is
+`REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated`, which
+removes the exposure at its source instead of gating it. Deliberately not
+done here: it is a different change from the one that was asked for, and
+Supabase's default-grant machinery may re-apply grants on some operations,
+so it wants its own pass with its own verification.
+
+**Also checked, all clean.** No views, no materialized views (RLS does not
+apply to matviews, so one in `public` would have been a real hole), and no
+functions in `public` — so no `SECURITY DEFINER` surface. All five
+extensions (`vector`, `pgcrypto`, `uuid-ossp`, `pg_stat_statements`,
+`supabase_vault`) are installed outside `public`, so no extension functions
+are exposed through it. The 7 identity sequences do grant `anon` usage,
+which leaks nothing on its own and is moot once RLS blocks the inserts that
+would consume them.
+
